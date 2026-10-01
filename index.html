@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Filettature — Officina</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f5f3; --panel:#ffffff; --ink:#1b1f23; --ink-dim:#5b6470;
+    --line:#d8dbdd; --accent:#c76a1f; --accent-ink:#ffffff;
+    --good:#2f7d4f; --warn:#b5391c; --mono-bg:#eef0ee;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14171a; --panel:#1d2226; --ink:#e7e9ea; --ink-dim:#9aa3ab;
+      --line:#33393e; --accent:#e2934c; --accent-ink:#14171a;
+      --good:#5cc98a; --warn:#e8735a; --mono-bg:#242a2e;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14171a; --panel:#1d2226; --ink:#e7e9ea; --ink-dim:#9aa3ab;
+    --line:#33393e; --accent:#e2934c; --accent-ink:#14171a;
+    --good:#5cc98a; --warn:#e8735a; --mono-bg:#242a2e;
+  }
+  html,body{height:100%;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:780px;margin:0 auto;padding:22px 16px 60px;}
+  h1{font-size:1.3rem;font-weight:700;margin:0 0 4px;letter-spacing:-0.01em;}
+  .sub{color:var(--ink-dim);font-size:0.88rem;margin:0;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 16px 18px;margin-bottom:14px;}
+  .panel h2{font-size:0.98rem;margin:0 0 12px;font-weight:700;}
+  .panel h3{font-size:0.86rem;margin:14px 0 8px;font-weight:700;color:var(--ink-dim);}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+  .field label{font-size:0.8rem;color:var(--ink-dim);font-weight:600;}
+  .row{display:grid;grid-template-columns:1fr 1fr;column-gap:10px;row-gap:6px;margin-bottom:12px;align-items:end;}
+  .row label{font-size:0.8rem;color:var(--ink-dim);font-weight:600;}
+  select, input[type=number]{
+    font-family:inherit;font-size:0.96rem;padding:9px 10px;border-radius:7px;
+    border:1px solid var(--line);background:var(--mono-bg);color:var(--ink);width:100%;
+  }
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .result{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px;border-radius:8px;background:var(--mono-bg);margin-bottom:7px;}
+  .result .lbl{font-size:0.83rem;color:var(--ink-dim);}
+  .result .val{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:1.08rem;font-weight:700;align-self:flex-end;}
+  .result.go .val{color:var(--good);}
+  .result.nogo .val{color:var(--warn);}
+  .note{font-size:0.78rem;color:var(--ink-dim);margin-top:8px;line-height:1.5;}
+  .badge{display:inline-block;font-size:0.7rem;padding:2px 7px;border-radius:99px;margin-left:6px;font-weight:700;}
+  .badge.exact{background:rgba(47,125,79,0.15);color:var(--good);}
+  .badge.interp{background:rgba(199,106,31,0.18);color:var(--accent);}
+  .badge.est{background:rgba(181,57,28,0.15);color:var(--warn);}
+  table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:4px;font-size:0.86rem;}
+  th,td{text-align:right;padding:6px 5px;border-bottom:1px solid var(--line);font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top;}
+  th:first-child,td:first-child{text-align:left;font-family:inherit;white-space:normal;}
+  th{color:var(--ink-dim);font-weight:600;font-size:0.74rem;}
+  table.cols-3 col:first-child{width:46%;}
+  table.cols-3 col:not(:first-child){width:27%;}
+  table.cols-2 col:first-child{width:62%;}
+  table.cols-2 col:last-child{width:38%;}
+  tr.spring td{color:var(--ink-dim);}
+  tr.checkpoint td{color:var(--accent);font-weight:700;}
+  .formula{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:0.8rem;color:var(--ink-dim);background:var(--mono-bg);padding:7px 9px;border-radius:6px;margin-bottom:12px;overflow-x:auto;white-space:nowrap;}
+  nav.tabs{display:flex;gap:4px;margin:16px 0 14px;border-bottom:1px solid var(--line);overflow-x:auto;}
+  nav.tabs button{appearance:none;border:none;background:none;color:var(--ink-dim);font-size:0.86rem;font-weight:600;padding:9px 3px;margin-right:14px;cursor:pointer;border-bottom:2px solid transparent;transform:translateY(1px);white-space:nowrap;}
+  nav.tabs button.active{color:var(--ink);border-bottom-color:var(--accent);}
+  button.print-btn{
+    appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font-size:0.82rem;font-weight:600;padding:7px 12px;border-radius:7px;cursor:pointer;
+  }
+  .headrow{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+
+  @media print{
+    body{background:#fff;color:#000;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="headrow">
+      <div>
+        <h1>Filettature — Officina</h1>
+        <p class="sub">Tamponi, accoppiamenti e tornitura, con incrementi diametrali da leggere sul visualizzatore.</p>
+      </div>
+      <button class="print-btn" onclick="scaricaPdf()">Scarica PDF</button>
+    </div>
+  </header>
+
+  <div class="panel">
+    <h2>Filettatura di riferimento</h2>
+    <div class="row">
+      <label>Diametro nominale D (mm)</label>
+      <label>Passo P (mm)</label>
+      <input type="number" id="d-nom" value="24" step="0.01">
+      <input type="number" id="p-nom" value="1.5" step="0.01">
+    </div>
+    <p class="note" id="std-note"></p>
+  </div>
+
+  <nav class="tabs">
+    <button id="tb1" class="active" onclick="showTab(1)">Tampone int.</button>
+    <button id="tb2" onclick="showTab(2)">Accoppiamento</button>
+    <button id="tb3" onclick="showTab(3)">Realizz. esterna</button>
+    <button id="tb4" onclick="showTab(4)">Realizz. interna</button>
+  </nav>
+
+  <!-- TAB 1: TAMPONE PASSA/NON-PASSA -->
+  <div id="tab1">
+    <div class="panel">
+      <h2>Tampone maschio (calibro filettato) per filettatura interna</h2>
+      <div class="row">
+        <label>Classe filettatura interna da verificare</label>
+        <label>Diametro rullo dw (mm)</label>
+        <select id="classe-int-tampone"><option value="5H">5H</option><option value="6H">6H</option><option value="7H">7H</option></select>
+        <input type="number" id="dw1" value="0.90" step="0.01" min="0.1">
+      </div>
+      <p class="note" id="campo-rulli-note"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Target diametro medio del tampone <span class="badge" id="badge1"></span></h2>
+      <div class="result">
+        <span class="lbl">D2 min filettatura interna → PD tampone PASSA</span>
+        <span class="val" id="d2go">—</span>
+      </div>
+      <div class="result">
+        <span class="lbl">D2 max filettatura interna → PD tampone NON-PASSA</span>
+        <span class="val" id="d2nogo">—</span>
+      </div>
+      <p class="note">Il tampone PASSA riproduce il limite minimo del diametro medio della madrevite (deve entrare libero); il NON-PASSA riproduce il limite massimo (non deve entrare, o al massimo 1-3 filetti).</p>
+    </div>
+
+    <div class="panel">
+      <h2>Quota sopra i rulli da raggiungere</h2>
+      <div class="formula">M = d2 + 3·dw − (√3⁄2)·P</div>
+      <div class="result go">
+        <span class="lbl">M tampone PASSA</span>
+        <span class="val" id="mgo1">—</span>
+      </div>
+      <div class="result nogo">
+        <span class="lbl">M tampone NON-PASSA</span>
+        <span class="val" id="mnogo1">—</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Diametri da leggere sul visualizzatore (avvicinamento)</h2>
+      <table class="cols-2"><colgroup><col><col></colgroup><thead><tr><th>Passata</th><th>Diametro (mm)</th></tr></thead><tbody id="tampone-body"></tbody></table>
+      <p class="note">Tabella di avvicinamento comune a entrambi i tamponi (partendo dal grezzo al diametro nominale). Dal punto evidenziato in poi, abbandona il calcolo e controlla direttamente con i rulli: fermati quando raggiungi <b>M PASSA</b> per il tampone GO, oppure <b>M NON-PASSA</b> per l'altro.</p>
+    </div>
+  </div>
+
+  <!-- TAB 2: ACCOPPIAMENTO -->
+  <div id="tab2" style="display:none;">
+    <div class="panel">
+      <h2>Classi a confronto <span class="badge" id="badge2"></span></h2>
+      <div class="row">
+        <label>Classe vite (esterna)</label>
+        <label>Classe madrevite (interna)</label>
+        <select id="classe-ext-acc"><option value="6g">6g</option><option value="6h">6h</option><option value="4g6g">4g6g</option><option value="5g">5g</option><option value="6e">6e</option><option value="7g">7g</option><option value="8g">8g</option></select>
+        <select id="classe-int-acc"><option value="5H">5H</option><option value="6H">6H</option><option value="7H">7H</option></select>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Diametro medio (d2 / D2)</h2>
+      <table class="cols-3">
+        <colgroup><col><col><col></colgroup>
+        <thead><tr><th>Diametro</th><th>min</th><th>max</th></tr></thead>
+        <tbody>
+          <tr><td>Vite d2</td><td id="acc-dext-min">—</td><td id="acc-dext-max">—</td></tr>
+          <tr><td>Madrevite D2</td><td id="acc-dint-min">—</td><td id="acc-dint-max">—</td></tr>
+        </tbody>
+      </table>
+      <h3>Gioco sul diametro medio</h3>
+      <div class="result">
+        <span class="lbl">Gioco minimo (D2min − d2max)</span>
+        <span class="val" id="gioco-min">—</span>
+      </div>
+      <div class="result">
+        <span class="lbl">Gioco massimo (D2max − d2min)</span>
+        <span class="val" id="gioco-max">—</span>
+      </div>
+      <p class="note" id="acc-warn"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Accoppiamenti tipici di riferimento</h2>
+      <table class="cols-2">
+        <colgroup><col><col></colgroup>
+        <thead><tr><th style="text-align:left">Coppia</th><th style="text-align:left">Uso</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left;font-family:inherit">6H / 6g</td><td style="text-align:left;font-family:inherit">Standard, uso generale</td></tr>
+          <tr><td style="text-align:left;font-family:inherit">6H / 6e</td><td style="text-align:left;font-family:inherit">Gioco maggiore (rivestimenti)</td></tr>
+          <tr><td style="text-align:left;font-family:inherit">7H / 8g</td><td style="text-align:left;font-family:inherit">Condizioni gravose</td></tr>
+          <tr><td style="text-align:left;font-family:inherit">6H / 4g6g</td><td style="text-align:left;font-family:inherit">Precisione, gioco minimo</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 3: REALIZZAZIONE ESTERNA -->
+  <div id="tab3" style="display:none;">
+    <div class="panel">
+      <h2>Filettatura esterna — rulli e tolleranza <span class="badge" id="badge3"></span></h2>
+      <div class="row">
+        <label>Classe di tolleranza</label>
+        <label>Diametro rullo dw (mm)</label>
+        <select id="classe-ext3"><option value="6g">6g</option><option value="6h">6h</option><option value="4g6g">4g6g</option><option value="5g">5g</option><option value="6e">6e</option><option value="7g">7g</option><option value="8g">8g</option></select>
+        <input type="number" id="dw3" value="0.90" step="0.01" min="0.1">
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Quota sopra i rulli</h2>
+      <div class="formula">M = d2 + 3·dw − (√3⁄2)·P</div>
+      <div class="result go"><span class="lbl">Quota MAX (limite pieno / GO)</span><span class="val" id="mmax3">—</span></div>
+      <div class="result nogo"><span class="lbl">Quota MIN (limite finale / NO-GO)</span><span class="val" id="mmin3">—</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Diametri da leggere sul visualizzatore</h2>
+      <table class="cols-2"><colgroup><col><col></colgroup><thead><tr><th>Passata</th><th>Diametro (mm)</th></tr></thead><tbody id="est-body"></tbody></table>
+      <p class="note">Si parte dal diametro esterno massimo di classe (grezzo tornito a misura) e si scende verso il nocciolo. Dal punto evidenziato in poi, verifica con i rulli invece di fidarti solo del calcolo, fermandoti tra la quota MIN e la quota MAX.</p>
+    </div>
+  </div>
+
+  <!-- TAB 4: REALIZZAZIONE INTERNA -->
+  <div id="tab4" style="display:none;">
+    <div class="panel">
+      <h2>Filettatura interna — diametro di tornitura del nocciolo</h2>
+      <div class="field">
+        <label>Diametro pre-foro / nocciolo (mm)</label>
+        <input type="number" id="prefo4" step="0.01">
+      </div>
+      <p class="note">Precompilato al valore teorico (D − 1,0825·P); modificalo se hai misurato un foro diverso.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Diametri da leggere sul visualizzatore</h2>
+      <table class="cols-2"><colgroup><col><col></colgroup><thead><tr><th>Passata</th><th>Diametro (mm)</th></tr></thead><tbody id="int-body"></tbody></table>
+      <p class="note">Dal punto evidenziato in poi, abbandona il calcolo e controlla con il tampone passa/non-passa (vedi tab "Tampone int."). Il diametro finale di cresta non è quota critica: la tenuta dipende dal diametro medio.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===========================================================================
+// DATI DI RIFERIMENTO (ISO 965 / ASME B1.13M) — usati come ancore per calcolo
+// esatto (misura standard) o interpolazione (misura speciale).
+// EXT: [designazione, P, classe, dmax, dmin, d2max, d2min, nota]
+// INT: [designazione, P, classe, D1min, D1max, D2min, D2max, Dmin, Dmax, nota]
+// ===========================================================================
+const EXT = [
+["M1.6 x 0.35",0.35,"6g",1.581,1.496,1.354,1.291,""],
+["M1.6 x 0.35",0.35,"6h",1.600,1.515,1.373,1.310,""],
+["M1.6 x 0.35",0.35,"4g6g",1.581,1.496,1.354,1.314,""],
+["M2 x 0.4",0.4,"6g",1.981,1.886,1.721,1.654,""],
+["M2 x 0.4",0.4,"6h",2.000,1.905,1.740,1.673,""],
+["M2 x 0.4",0.4,"4g6g",1.981,1.886,1.721,1.679,""],
+["M2.5 x 0.45",0.45,"6g",2.480,2.380,2.188,2.117,""],
+["M2.5 x 0.45",0.45,"6h",2.500,2.400,2.208,2.137,""],
+["M2.5 x 0.45",0.45,"4g6g",2.480,2.380,2.188,2.143,""],
+["M3 x 0.5",0.5,"6g",2.980,2.874,2.655,2.580,""],
+["M3 x 0.5",0.5,"6h",3.000,2.894,2.675,2.600,""],
+["M3 x 0.5",0.5,"4g6g",2.980,2.874,2.655,2.607,""],
+["M3.5 x 0.6",0.6,"6g",3.479,3.354,3.089,3.004,""],
+["M3.5 x 0.6",0.6,"6h",3.500,3.375,3.110,3.025,""],
+["M3.5 x 0.6",0.6,"4g6g",3.479,3.354,3.089,3.036,""],
+["M4 x 0.7",0.7,"6g",3.978,3.838,3.523,3.433,""],
+["M4 x 0.7",0.7,"6h",4.000,3.860,3.545,3.455,""],
+["M4 x 0.7",0.7,"4g6g",3.978,3.838,3.523,3.467,""],
+["M5 x 0.8",0.8,"6g",4.976,4.826,4.456,4.361,""],
+["M5 x 0.8",0.8,"6h",5.000,4.850,4.480,4.385,""],
+["M5 x 0.8",0.8,"4g6g",4.976,4.826,4.456,4.396,""],
+["M6 x 1",1.0,"6g",5.974,5.794,5.324,5.212,""],
+["M6 x 1",1.0,"6h",6.000,5.820,5.350,5.238,""],
+["M6 x 1",1.0,"4g6g",5.974,5.794,5.324,5.253,""],
+["M8 x 1.25",1.25,"6g",7.972,7.760,7.160,7.042,""],
+["M8 x 1.25",1.25,"6h",8.000,7.788,7.188,7.070,""],
+["M8 x 1.25",1.25,"4g6g",7.972,7.760,7.160,7.085,""],
+["M8 x 1",1.0,"6g",7.974,7.794,7.324,7.212,""],
+["M8 x 1",1.0,"6h",8.000,7.820,7.350,7.238,""],
+["M8 x 1",1.0,"4g6g",7.974,7.794,7.324,7.253,""],
+["M10 x 1.5",1.5,"6g",9.968,9.732,8.994,8.862,""],
+["M10 x 1.5",1.5,"6h",10.000,9.764,9.026,8.894,""],
+["M10 x 1.5",1.5,"4g6g",9.968,9.732,8.994,8.909,""],
+["M10 x 1.25",1.25,"6g",9.972,9.760,9.160,9.042,""],
+["M10 x 1.25",1.25,"6h",10.000,9.788,9.188,9.070,""],
+["M10 x 1.25",1.25,"4g6g",9.972,9.760,9.160,9.085,""],
+["M10 x 1",1.0,"6g",9.974,9.794,9.324,9.212,""],
+["M10 x 1",1.0,"6h",10.000,9.820,9.350,9.238,""],
+["M10 x 1",1.0,"4g6g",9.974,9.794,9.324,9.253,""],
+["M10 x 0.75",0.75,"6g",9.978,9.838,9.491,9.391,""],
+["M10 x 0.75",0.75,"6h",10.000,9.860,9.513,9.413,""],
+["M10 x 0.75",0.75,"4g6g",9.978,9.838,9.491,9.428,""],
+["M12 x 1.75",1.75,"6g",11.966,11.701,10.829,10.679,""],
+["M12 x 1.75",1.75,"6h",12.000,11.735,10.863,10.713,""],
+["M12 x 1.75",1.75,"4g6g",11.966,11.701,10.829,10.734,""],
+["M12 x 1.5",1.5,"6g",11.968,11.732,10.994,10.854,""],
+["M12 x 1.5",1.5,"6h",12.000,11.764,11.026,10.886,""],
+["M12 x 1.5",1.5,"4g6g",11.968,11.732,10.994,10.904,""],
+["M12 x 1.25",1.25,"6g",11.972,11.760,11.160,11.028,""],
+["M12 x 1.25",1.25,"6h",12.000,11.788,11.188,11.056,""],
+["M12 x 1.25",1.25,"4g6g",11.972,11.760,11.160,11.075,""],
+["M12 x 1",1.0,"6g",11.974,11.794,11.324,11.206,""],
+["M12 x 1",1.0,"6h",12.000,11.820,11.350,11.232,""],
+["M12 x 1",1.0,"4g6g",11.974,11.794,11.324,11.249,""],
+["M14 x 2",2.0,"6g",13.962,13.682,12.663,12.503,""],
+["M14 x 2",2.0,"6h",14.000,13.720,12.701,12.541,""],
+["M14 x 2",2.0,"4g6g",13.962,13.682,12.663,12.563,""],
+["M14 x 1.5",1.5,"6g",13.968,13.732,12.994,12.854,""],
+["M14 x 1.5",1.5,"6h",14.000,13.764,13.026,12.886,""],
+["M14 x 1.5",1.5,"4g6g",13.968,13.732,12.994,12.904,""],
+["M15 x 1",1.0,"6g",14.974,14.794,14.324,14.206,""],
+["M15 x 1",1.0,"6h",15.000,14.820,14.350,14.232,""],
+["M15 x 1",1.0,"4g6g",14.974,14.794,14.324,14.249,""],
+["M16 x 2",2.0,"6g",15.962,15.682,14.663,14.503,""],
+["M16 x 2",2.0,"6h",16.000,15.720,14.701,14.541,""],
+["M16 x 2",2.0,"4g6g",15.962,15.682,14.663,14.563,""],
+["M16 x 1.5",1.5,"6g",15.968,15.732,14.994,14.854,""],
+["M16 x 1.5",1.5,"6h",16.000,15.764,15.026,14.886,""],
+["M16 x 1.5",1.5,"4g6g",15.968,15.732,14.994,14.904,""],
+["M17 x 1",1.0,"6g",16.974,16.794,16.324,16.206,""],
+["M17 x 1",1.0,"6h",17.000,16.820,16.350,16.232,""],
+["M17 x 1",1.0,"4g6g",16.974,16.794,16.324,16.249,""],
+["M18 x 1.5",1.5,"6g",17.968,17.732,16.994,16.854,""],
+["M18 x 1.5",1.5,"6h",18.000,17.764,17.026,16.886,""],
+["M18 x 1.5",1.5,"4g6g",17.968,17.732,16.994,16.904,""],
+["M20 x 2.5",2.5,"6g",19.958,19.623,18.334,18.164,""],
+["M20 x 2.5",2.5,"6h",20.000,19.665,18.376,18.206,""],
+["M20 x 2.5",2.5,"4g6g",19.958,19.623,18.334,18.228,""],
+["M20 x 1.5",1.5,"6g",19.968,19.732,18.994,18.854,""],
+["M20 x 1.5",1.5,"6h",20.000,19.764,19.026,18.886,""],
+["M20 x 1.5",1.5,"4g6g",19.968,19.732,18.994,18.904,""],
+["M20 x 1",1.0,"6g",19.974,19.794,19.324,19.206,""],
+["M20 x 1",1.0,"6h",20.000,19.820,19.350,19.232,""],
+["M20 x 1",1.0,"4g6g",19.974,19.794,19.324,19.249,""],
+["M22 x 2.5",2.5,"6g",21.958,21.623,20.334,20.164,""],
+["M22 x 2.5",2.5,"6h",22.000,21.665,20.376,20.206,""],
+["M22 x 1.5",1.5,"6g",21.968,21.732,20.994,20.854,""],
+["M22 x 1.5",1.5,"6h",22.000,21.764,21.026,20.886,""],
+["M22 x 1.5",1.5,"4g6g",21.968,21.732,20.994,20.904,""],
+["M24 x 3",3.0,"6g",23.952,23.577,22.003,21.803,""],
+["M24 x 3",3.0,"6h",24.000,23.625,22.051,21.851,""],
+["M24 x 3",3.0,"4g6g",23.952,23.577,22.003,21.878,""],
+["M24 x 2",2.0,"6g",23.962,23.682,22.663,22.493,""],
+["M24 x 2",2.0,"6h",24.000,23.720,22.701,22.531,""],
+["M24 x 2",2.0,"4g6g",23.962,23.682,22.663,22.557,""],
+["M24 x 1.5",1.5,"6g",23.968,23.732,22.994,22.844,""],
+["M25 x 1.5",1.5,"6g",24.968,24.732,23.994,23.844,""],
+["M25 x 1.5",1.5,"6h",25.000,24.764,24.026,23.876,""],
+["M25 x 1.5",1.5,"4g6g",24.968,24.732,23.994,23.899,""],
+["M27 x 3",3.0,"6g",26.952,26.577,25.003,24.803,""],
+["M27 x 3",3.0,"6h",27.000,26.625,25.051,24.851,""],
+["M27 x 2",2.0,"6g",26.962,26.682,25.663,25.493,""],
+["M27 x 2",2.0,"6h",27.000,26.720,25.701,25.531,""],
+["M27 x 2",2.0,"4g6g",26.962,26.682,25.663,25.557,""],
+["M30 x 3.5",3.5,"6g",29.947,29.522,27.674,27.462,""],
+["M30 x 3.5",3.5,"6h",30.000,29.575,27.727,27.515,""],
+["M30 x 3.5",3.5,"4g6g",29.947,29.522,27.674,27.542,""],
+["M30 x 2",2.0,"6g",29.962,29.682,28.663,28.493,""],
+["M30 x 2",2.0,"6h",30.000,29.720,28.701,28.531,""],
+["M30 x 2",2.0,"4g6g",29.962,29.682,28.663,28.557,""],
+["M30 x 1.5",1.5,"6g",29.968,29.732,28.994,28.844,""],
+["M30 x 1.5",1.5,"6h",30.000,29.764,29.026,28.876,""],
+["M30 x 1.5",1.5,"4g6g",29.968,29.732,28.994,28.899,""],
+["M33 x 2",2.0,"6g",32.962,32.682,31.663,31.493,""],
+["M33 x 2",2.0,"6h",33.000,32.720,31.701,31.531,""],
+["M33 x 2",2.0,"4g6g",32.962,32.682,31.663,31.557,""],
+["M35 x 1.5",1.5,"6g",34.968,34.732,33.994,33.844,""],
+["M35 x 1.5",1.5,"6h",35.000,34.764,34.026,33.876,""],
+["M36 x 4",4.0,"6g",35.940,35.465,33.342,33.118,""],
+["M36 x 4",4.0,"6h",36.000,35.525,33.402,33.178,""],
+["M36 x 4",4.0,"4g6g",35.940,35.465,33.342,33.202,""],
+["M36 x 2",2.0,"6g",35.962,35.682,34.663,34.493,""],
+["M36 x 2",2.0,"6h",36.000,35.720,34.701,34.531,""],
+["M36 x 2",2.0,"4g6g",35.962,35.682,34.663,34.557,""],
+["M39 x 2",2.0,"6g",38.962,38.682,37.663,37.493,""],
+["M39 x 2",2.0,"6h",39.000,38.720,37.701,37.531,""],
+["M39 x 2",2.0,"4g6g",38.962,38.682,37.663,37.557,""],
+["M40 x 1.5",1.5,"6g",39.968,39.732,38.994,38.844,""],
+["M40 x 1.5",1.5,"6h",40.000,39.764,39.026,38.876,""],
+["M40 x 1.5",1.5,"4g6g",39.968,39.732,38.994,38.899,""],
+["M42 x 4.5",4.5,"6g",41.937,41.437,39.014,38.778,""],
+["M42 x 4.5",4.5,"6h",42.000,41.500,39.077,38.841,""],
+["M42 x 4.5",4.5,"4g6g",41.937,41.437,39.014,38.864,""],
+["M42 x 2",2.0,"6g",41.962,41.682,40.663,40.493,""],
+["M42 x 2",2.0,"6h",42.000,41.720,40.701,40.531,""],
+["M42 x 2",2.0,"4g6g",41.962,41.682,40.663,40.557,""],
+["M45 x 1.5",1.5,"6g",44.968,44.732,43.994,43.844,""],
+["M45 x 1.5",1.5,"6h",45.000,44.764,44.026,43.876,""],
+["M45 x 1.5",1.5,"4g6g",44.968,44.732,43.994,43.899,""],
+["M48 x 5",5.0,"6g",47.929,47.399,44.681,44.431,""],
+["M48 x 5",5.0,"6h",48.000,47.470,44.752,44.502,""],
+["M48 x 5",5.0,"4g6g",47.929,47.399,44.681,44.521,""],
+["M48 x 2",2.0,"6g",47.962,47.682,46.663,46.483,""],
+["M48 x 2",2.0,"6h",48.000,47.720,46.701,46.521,""],
+["M48 x 2",2.0,"4g6g",47.962,47.682,46.663,46.551,""],
+["M50 x 1.5",1.5,"6g",49.968,49.732,48.994,48.834,""],
+["M50 x 1.5",1.5,"6h",50.000,49.764,49.026,48.866,""],
+["M50 x 1.5",1.5,"4g6g",49.968,49.732,48.994,48.894,""],
+["M55 x 1.5",1.5,"6g",54.968,54.732,53.994,53.834,""],
+["M55 x 1.5",1.5,"6h",55.000,54.764,54.026,53.866,""],
+["M55 x 1.5",1.5,"4g6g",54.968,54.732,53.994,53.894,""],
+["M56 x 5.5",5.5,"6g",55.925,55.365,52.353,52.088,""],
+["M56 x 5.5",5.5,"6h",56.000,55.440,52.428,52.163,""],
+["M56 x 5.5",5.5,"4g6g",55.925,55.365,52.353,52.183,""],
+["M56 x 2",2.0,"6g",55.962,55.682,54.663,54.483,""],
+["M56 x 2",2.0,"6h",56.000,55.720,54.701,54.521,""],
+["M56 x 2",2.0,"4g6g",55.962,55.682,54.663,54.551,""],
+["M60 x 1.5",1.5,"6g",59.968,59.732,58.994,58.834,""],
+["M60 x 1.5",1.5,"6h",60.000,59.764,59.026,58.866,""],
+["M60 x 1.5",1.5,"4g6g",59.968,59.732,58.994,58.894,""],
+];
+
+const INT = [
+["M1.6 x 0.35",0.35,"6H",1.221,1.321,1.373,1.458,1.600,1.736],
+["M2 x 0.4",0.4,"6H",1.567,1.679,1.740,1.830,2.000,2.148],
+["M2.5 x 0.45",0.45,"6H",2.013,2.138,2.208,2.303,2.500,2.660],
+["M3 x 0.5",0.5,"6H",2.459,2.599,2.675,2.775,3.000,3.172],
+["M3.5 x 0.6",0.6,"6H",2.850,3.010,3.110,3.222,3.500,3.698],
+["M4 x 0.7",0.7,"6H",3.242,3.422,3.545,3.663,4.000,4.219],
+["M5 x 0.8",0.8,"6H",4.134,4.334,4.480,4.605,5.000,5.240],
+["M6 x 1",1.0,"6H",4.917,5.153,5.350,5.500,6.000,6.294],
+["M8 x 1.25",1.25,"6H",6.647,6.912,7.188,7.348,8.000,8.340],
+["M8 x 1",1.0,"6H",6.917,7.153,7.350,7.500,8.000,8.294],
+["M10 x 1.5",1.5,"6H",8.376,8.676,9.026,9.206,10.000,10.397],
+["M10 x 1.25",1.25,"6H",8.647,8.912,9.188,9.348,10.000,10.340],
+["M10 x 1",1.0,"6H",8.917,9.153,9.350,9.500,10.000,10.294],
+["M10 x 0.75",0.75,"6H",9.188,9.378,9.513,9.645,10.000,10.240],
+["M12 x 1.75",1.75,"6H",10.106,10.441,10.863,11.063,12.000,12.452],
+["M12 x 1.5",1.5,"6H",10.376,10.676,11.026,11.216,12.000,12.407],
+["M12 x 1.25",1.25,"6H",10.647,10.912,11.188,11.368,12.000,12.360],
+["M12 x 1",1.0,"6H",10.917,11.153,11.350,11.510,12.000,12.304],
+["M14 x 2",2.0,"6H",11.835,12.210,12.701,12.913,14.000,14.501],
+["M14 x 1.5",1.5,"6H",12.376,12.676,13.026,13.216,14.000,14.407],
+["M15 x 1",1.0,"6H",13.917,14.153,14.350,14.510,15.000,15.304],
+["M16 x 2",2.0,"6H",13.835,14.210,14.701,14.913,16.000,16.501],
+["M16 x 1.5",1.5,"6H",14.376,14.676,15.026,15.216,16.000,16.407],
+["M17 x 1",1.0,"6H",15.917,16.153,16.350,16.510,17.000,17.304],
+["M18 x 1.5",1.5,"6H",16.376,16.676,17.026,17.216,18.000,18.407],
+["M20 x 2.5",2.5,"6H",17.294,17.744,18.376,18.600,20.000,20.585],
+["M20 x 1.5",1.5,"6H",18.376,18.676,19.026,19.216,20.000,20.407],
+["M20 x 1",1.0,"6H",18.917,19.153,19.350,19.510,20.000,20.304],
+["M22 x 2.5",2.5,"6H",19.294,19.744,20.376,20.600,22.000,22.585],
+["M22 x 1.5",1.5,"6H",20.376,20.676,21.026,21.216,22.000,22.407],
+["M24 x 3",3.0,"6H",20.752,21.252,22.051,22.316,24.000,24.698],
+["M24 x 2",2.0,"6H",21.835,22.210,22.701,22.925,24.000,24.513],
+["M24 x 1.5",1.5,"6H",22.376,22.676,23.026,23.226,24.000,24.417],
+["M25 x 1.5",1.5,"6H",23.376,23.676,24.026,24.226,25.000,25.417],
+["M27 x 3",3.0,"6H",23.752,24.252,25.051,25.316,27.000,27.698],
+["M27 x 2",2.0,"6H",24.835,25.210,25.701,25.925,27.000,27.513],
+["M30 x 3.5",3.5,"6H",26.211,26.771,27.727,28.007,30.000,30.786],
+["M30 x 2",2.0,"6H",27.835,28.210,28.701,28.925,30.000,30.513],
+["M30 x 1.5",1.5,"6H",28.376,28.676,29.026,29.226,30.000,30.417],
+["M33 x 2",2.0,"6H",30.835,31.210,31.701,31.925,33.000,33.513],
+["M35 x 1.5",1.5,"6H",33.376,33.676,34.026,34.226,35.000,35.417],
+["M36 x 4",4.0,"6H",31.670,32.270,33.402,33.702,36.000,36.877],
+["M36 x 2",2.0,"6H",33.835,34.210,34.701,34.925,36.000,36.513],
+["M39 x 2",2.0,"6H",36.835,37.210,37.701,37.925,39.000,39.513],
+["M40 x 1.5",1.5,"6H",38.376,38.676,39.026,39.226,40.000,40.417],
+["M42 x 4.5",4.5,"6H",37.129,37.799,39.077,39.392,42.000,42.964],
+["M42 x 2",2.0,"6H",39.835,40.210,40.701,40.925,42.000,42.513],
+["M45 x 1.5",1.5,"6H",43.376,43.676,44.026,44.226,45.000,45.417],
+["M48 x 5",5.0,"6H",42.587,43.297,44.752,45.087,48.000,49.056],
+["M48 x 2",2.0,"6H",45.835,46.210,46.701,46.937,48.000,48.525],
+["M50 x 1.5",1.5,"6H",48.376,48.676,49.026,49.238,50.000,50.429],
+["M55 x 1.5",1.5,"6H",53.376,53.676,54.026,54.238,55.000,55.429],
+["M56 x 5.5",5.5,"6H",50.046,50.796,52.428,52.783,56.000,57.149],
+["M56 x 2",2.0,"6H",53.835,54.210,54.701,54.937,56.000,56.525],
+["M60 x 1.5",1.5,"6H",58.376,58.676,59.026,59.238,60.000,60.429],
+];
+
+const PESI = [0.2469,0.1852,0.1481,0.1235,0.0988,0.0741,0.0617,0.0617];
+const EPS = 1e-6;
+function rowD(row){ return parseFloat(row[0].match(/M([\d.]+)/)[1]); }
+function d2basic(D,P){ return D - 0.649519*P; }
+function D1basic(D,P){ return D - 1.082532*P; }
+
+// ---------------------------------------------------------------------
+// Parametri di tolleranza per (D,P,classe): esatto se (D,P) e' in
+// tabella, altrimenti interpolato linearmente tra i due passi standard
+// piu' vicini (stessa classe), usando come riferimento diametrale la
+// riga la cui D e' piu' vicina alla D richiesta.
+// ---------------------------------------------------------------------
+// Grado di tolleranza (Td2/Td) scala di un fattore ~1.25 per ogni passo di
+// grado (dedotto dal confronto reale 4g6g/6g nei dati tabellati: 2 gradi di
+// differenza, fattore osservato ~1.55-1.6 => ~1.25 a passo singolo).
+const GRADE_STEP = 1.25;
+
+function getExtParams(D,P,classe){
+  // Classi derivate (non tabellate direttamente): stesse ampiezze di tolleranza
+  // della classe base a parita' di grado, con scostamento fondamentale o
+  // ampiezza adattati secondo le relazioni note della norma ISO 965-1.
+  if(classe==='6e'){
+    const base = getExtParams(D,P,'6g');
+    return { es: base.es - 0.035, Td2: base.Td2, Td: base.Td, exact:false, derived:true };
+  }
+  if(classe==='8g'){
+    const base = getExtParams(D,P,'6g');
+    const f = GRADE_STEP*GRADE_STEP; // due gradi sopra il 6
+    return { es: base.es, Td2: base.Td2*f, Td: base.Td*f, exact:false, derived:true };
+  }
+  if(classe==='7g'){
+    const base = getExtParams(D,P,'6g');
+    return { es: base.es, Td2: base.Td2*GRADE_STEP, Td: base.Td*GRADE_STEP, exact:false, derived:true };
+  }
+  if(classe==='5g'){
+    const base = getExtParams(D,P,'6g');
+    const f = 1/GRADE_STEP;
+    return { es: base.es, Td2: base.Td2*f, Td: base.Td*f, exact:false, derived:true };
+  }
+  const rows = EXT.filter(r=>r[2]===classe);
+  const exact = rows.find(r=>Math.abs(r[1]-P)<EPS && Math.abs(rowD(r)-D)<EPS);
+  if(exact){
+    const es = exact[5]-d2basic(rowD(exact),exact[1]);
+    const Td2 = exact[5]-exact[6];
+    const Td = exact[3]-rowD(exact);
+    return {es, Td2, Td, exact:true};
+  }
+  // per ciascun passo disponibile, prendi la riga con D piu' vicina alla nostra
+  const byP = {};
+  rows.forEach(r=>{
+    const diff = Math.abs(rowD(r)-D);
+    if(!byP[r[1]] || diff < byP[r[1]].diff) byP[r[1]] = {row:r, diff};
+  });
+  const pts = Object.keys(byP).map(p=>({P:parseFloat(p), row:byP[p].row})).sort((a,b)=>a.P-b.P);
+  let lo = pts[0], hi = pts[pts.length-1];
+  for(let i=0;i<pts.length-1;i++){
+    if(pts[i].P<=P && pts[i+1].P>=P){ lo=pts[i]; hi=pts[i+1]; break; }
+  }
+  const esOf = pt => pt.row[5]-d2basic(rowD(pt.row),pt.P);
+  const Td2Of = pt => pt.row[5]-pt.row[6];
+  const TdOf = pt => pt.row[3]-rowD(pt.row);
+  const t = (hi.P===lo.P) ? 0 : (P-lo.P)/(hi.P-lo.P);
+  const lerp = (a,b)=>a+t*(b-a);
+  return {
+    es: lerp(esOf(lo),esOf(hi)),
+    Td2: lerp(Td2Of(lo),Td2Of(hi)),
+    Td: lerp(TdOf(lo),TdOf(hi)),
+    exact:false
+  };
+}
+
+function getIntParams(D,P,classe){
+  if(classe==='7H'){
+    const base = getIntParams(D,P,'6H');
+    return { TD2: base.TD2*GRADE_STEP, TD1: base.TD1*GRADE_STEP, Td: base.Td*GRADE_STEP, exact:false, derived:true };
+  }
+  if(classe==='5H'){
+    const base = getIntParams(D,P,'6H');
+    const f = 1/GRADE_STEP;
+    return { TD2: base.TD2*f, TD1: base.TD1*f, Td: base.Td*f, exact:false, derived:true };
+  }
+  const rows = INT.filter(r=>r[2]===classe);
+  const exact = rows.find(r=>Math.abs(r[1]-P)<EPS && Math.abs(rowD(r)-D)<EPS);
+  if(exact){
+    return {
+      TD2: exact[6]-exact[5],
+      TD1: exact[4]-exact[3],
+      Td:  exact[8]-rowD(exact),
+      exact:true
+    };
+  }
+  const byP = {};
+  rows.forEach(r=>{
+    const diff = Math.abs(rowD(r)-D);
+    if(!byP[r[1]] || diff < byP[r[1]].diff) byP[r[1]] = {row:r, diff};
+  });
+  const pts = Object.keys(byP).map(p=>({P:parseFloat(p), row:byP[p].row})).sort((a,b)=>a.P-b.P);
+  let lo = pts[0], hi = pts[pts.length-1];
+  for(let i=0;i<pts.length-1;i++){
+    if(pts[i].P<=P && pts[i+1].P>=P){ lo=pts[i]; hi=pts[i+1]; break; }
+  }
+  const TD2Of = pt => pt.row[6]-pt.row[5];
+  const TD1Of = pt => pt.row[4]-pt.row[3];
+  const TdOf  = pt => pt.row[8]-rowD(pt.row);
+  const t = (hi.P===lo.P) ? 0 : (P-lo.P)/(hi.P-lo.P);
+  const lerp = (a,b)=>a+t*(b-a);
+  return {
+    TD2: lerp(TD2Of(lo),TD2Of(hi)),
+    TD1: lerp(TD1Of(lo),TD1Of(hi)),
+    Td:  lerp(TdOf(lo),TdOf(hi)),
+    exact:false
+  };
+}
+
+function badgeHtml(params){
+  if(params.exact) return '<span class="badge exact">standard</span>';
+  if(params.derived) return '<span class="badge est">classe stimata</span>';
+  return '<span class="badge interp">interpolato</span>';
+}
+function combineParams(...list){
+  // per badge combinati: se una qualunque componente e' stimata (classe
+  // derivata) prevale "stimato"; altrimenti se una e' interpolata prevale
+  // "interpolato"; solo se tutte esatte risulta "standard".
+  if(list.some(p=>p.derived)) return {exact:false, derived:true};
+  if(list.some(p=>!p.exact)) return {exact:false, derived:false};
+  return {exact:true, derived:false};
+}
+
+// ---------------------------------------------------------------------
+// utility passate
+// ---------------------------------------------------------------------
+function buildPasses(startDiam, totalDelta, increasing){
+  const arr = [];
+  let cum = startDiam;
+  arr.push({label:'Grezzo/pre-foro', diam:cum, cls:''});
+  PESI.forEach((w,i)=>{
+    cum += increasing ? totalDelta*w : -totalDelta*w;
+    const isCheckpoint = (i === 5);
+    arr.push({label:'Passata '+(i+1), diam:cum, cls: isCheckpoint ? 'checkpoint':''});
+  });
+  arr.push({label:'Passata a vuoto', diam:cum, cls:'spring'});
+  arr.push({label:'Passata a vuoto', diam:cum, cls:'spring'});
+  return arr;
+}
+function renderPasses(tbodyEl, passes){
+  tbodyEl.innerHTML = '';
+  passes.forEach(p=>{
+    const tr = document.createElement('tr');
+    if(p.cls) tr.className = p.cls;
+    tr.innerHTML = `<td>${p.label}</td><td class="pass-diam">${p.diam.toFixed(2)}</td>`;
+    tbodyEl.appendChild(tr);
+  });
+}
+
+function currentD(){ return parseFloat(document.getElementById('d-nom').value); }
+function currentP(){ return parseFloat(document.getElementById('p-nom').value); }
+
+function refreshStdNote(){
+  const D = currentD(), P = currentP();
+  const std = EXT.some(r=>Math.abs(r[1]-P)<EPS && Math.abs(rowD(r)-D)<EPS);
+  document.getElementById('std-note').textContent = std
+    ? 'Combinazione standard: valori esatti da tabella ISO 965/ASME B1.13M.'
+    : 'Combinazione non standard: i valori di tolleranza sono interpolati dai passi standard più vicini (le quote nominali/basic restano esatte).';
+}
+
+function refreshAll(){
+  refreshStdNote();
+  calcTampone();
+  calcAccoppiamento();
+  calcEsterna();
+  calcInterna();
+}
+
+// ---------------------------------------------------------------------
+// TAB 1: TAMPONE
+// ---------------------------------------------------------------------
+function calcTampone(){
+  const D = currentD(), P = currentP();
+  const dw = parseFloat(document.getElementById('dw1').value);
+  const classe = document.getElementById('classe-int-tampone').value;
+  const dwMin = 0.560*P, dwMax = 0.900*P;
+  document.getElementById('campo-rulli-note').textContent =
+    `Campo utile rullo per questo passo (P=${P}): tra ${dwMin.toFixed(2)} e ${dwMax.toFixed(2)} mm (indicativo). Inserisci sotto il rullo che hai davvero.`;
+  if(isNaN(D)||isNaN(P)||isNaN(dw)){ return; }
+  const params = getIntParams(D,P,classe);
+  document.getElementById('badge1').innerHTML = badgeHtml(params);
+  const D2min = d2basic(D,P);           // EI=0 per posizione H
+  const D2max = D2min + params.TD2;
+  const Dnom = D;
+  const k = (Math.sqrt(3)/2)*P;
+  const mgo = D2min + 3*dw - k;
+  const mnogo = D2max + 3*dw - k;
+  document.getElementById('d2go').textContent = D2min.toFixed(3)+' mm';
+  document.getElementById('d2nogo').textContent = D2max.toFixed(3)+' mm';
+  document.getElementById('mgo1').textContent = mgo.toFixed(3)+' mm';
+  document.getElementById('mnogo1').textContent = mnogo.toFixed(3)+' mm';
+
+  const total = 1.082532*P;
+  renderPasses(document.getElementById('tampone-body'), buildPasses(Dnom, total, false));
+}
+document.getElementById('classe-int-tampone').addEventListener('change', calcTampone);
+document.getElementById('dw1').addEventListener('input', calcTampone);
+
+// ---------------------------------------------------------------------
+// TAB 2: ACCOPPIAMENTO
+// ---------------------------------------------------------------------
+function calcAccoppiamento(){
+  const D = currentD(), P = currentP();
+  const classeE = document.getElementById('classe-ext-acc').value;
+  const classeI = document.getElementById('classe-int-acc').value;
+  const set = (id,v)=>document.getElementById(id).textContent = (v!==undefined && !isNaN(v)) ? v.toFixed(3) : '—';
+  if(isNaN(D)||isNaN(P)) return;
+  const pe = getExtParams(D,P,classeE);
+  const pi = getIntParams(D,P,classeI);
+  document.getElementById('badge2').innerHTML = badgeHtml(combineParams(pe, pi));
+  const d2basicv = d2basic(D,P);
+  const d2max = d2basicv + pe.es;
+  const d2min = d2max - pe.Td2;
+  const D2min = d2basicv;
+  const D2max = D2min + pi.TD2;
+  set('acc-dext-min', d2min); set('acc-dext-max', d2max);
+  set('acc-dint-min', D2min); set('acc-dint-max', D2max);
+  const giocoMin = D2min - d2max;
+  const giocoMax = D2max - d2min;
+  set('gioco-min', giocoMin); set('gioco-max', giocoMax);
+  document.getElementById('acc-warn').textContent = giocoMin < 0
+    ? 'Attenzione: con questa coppia di classi è possibile interferenza sul diametro medio (gioco minimo negativo).'
+    : '';
+}
+document.getElementById('classe-ext-acc').addEventListener('change', calcAccoppiamento);
+document.getElementById('classe-int-acc').addEventListener('change', calcAccoppiamento);
+
+// ---------------------------------------------------------------------
+// TAB 3: REALIZZAZIONE ESTERNA
+// ---------------------------------------------------------------------
+function calcEsterna(){
+  const D = currentD(), P = currentP();
+  const dw = parseFloat(document.getElementById('dw3').value);
+  const classe = document.getElementById('classe-ext3').value;
+  if(isNaN(D)||isNaN(P)||isNaN(dw)) return;
+  const params = getExtParams(D,P,classe);
+  document.getElementById('badge3').innerHTML = badgeHtml(params);
+  const d2basicv = d2basic(D,P);
+  const D2MAX = d2basicv + params.es;
+  const D2MIN = D2MAX - params.Td2;
+  const DMAX = D + params.es;
+  const k = (Math.sqrt(3)/2)*P;
+  const mmax = D2MAX + 3*dw - k;
+  const mmin = D2MIN + 3*dw - k;
+  document.getElementById('mmax3').textContent = mmax.toFixed(3)+' mm';
+  document.getElementById('mmin3').textContent = mmin.toFixed(3)+' mm';
+
+  const total = 1.082532*P;
+  renderPasses(document.getElementById('est-body'), buildPasses(DMAX, total, false));
+}
+document.getElementById('classe-ext3').addEventListener('change', calcEsterna);
+document.getElementById('dw3').addEventListener('input', calcEsterna);
+
+// ---------------------------------------------------------------------
+// TAB 4: REALIZZAZIONE INTERNA
+// ---------------------------------------------------------------------
+const prefo4 = document.getElementById('prefo4');
+function aggiornaPrefo4(){
+  const D = currentD(), P = currentP();
+  if(isNaN(D)||isNaN(P)) return;
+  prefo4.value = (D - 1.082532*P).toFixed(2);
+}
+function calcInterna(){
+  const D = currentD(), P = currentP();
+  const preforo = parseFloat(prefo4.value);
+  if(isNaN(D)||isNaN(P)||isNaN(preforo)) return;
+  const total = D - preforo;
+  renderPasses(document.getElementById('int-body'), buildPasses(preforo, total, true));
+}
+prefo4.addEventListener('input', calcInterna);
+
+// ---------------------------------------------------------------------
+// wiring
+// ---------------------------------------------------------------------
+document.getElementById('d-nom').addEventListener('input', ()=>{ aggiornaPrefo4(); refreshAll(); });
+document.getElementById('p-nom').addEventListener('input', ()=>{ aggiornaPrefo4(); refreshAll(); });
+
+function showTab(n){
+  for(let i=1;i<=4;i++){
+    document.getElementById('tab'+i).style.display = (i===n) ? 'block':'none';
+    document.getElementById('tb'+i).classList.toggle('active', i===n);
+  }
+}
+
+aggiornaPrefo4();
+refreshAll();
+
+// ===========================================================================
+// Export PDF — un foglio solo, passate su un'unica riga (dimensione font
+// auto-adattata per starci), quota da leggere sul micrometro in evidenza.
+// ===========================================================================
+function readPasses(tbodyId){
+  const rows = [...document.getElementById(tbodyId).querySelectorAll('tr')];
+  return rows
+    .filter(tr => !tr.className.includes('spring'))
+    .map(tr => {
+      const tds = tr.querySelectorAll('td');
+      return { label: tds[0].textContent, diam: tds[1].textContent, checkpoint: tr.className.includes('checkpoint') };
+    });
+}
+
+function fitFontSize(doc, texts, maxWidth, maxSize, minSize){
+  let size = maxSize;
+  doc.setFont('courier','bold');
+  while(size > minSize){
+    doc.setFontSize(size);
+    const w = Math.max(...texts.map(t=>doc.getTextWidth(t)));
+    if(w <= maxWidth) break;
+    size -= 0.5;
+  }
+  return size;
+}
+
+function drawPassRow(doc, passes, y, marginL, usableW){
+  const n = passes.length;
+  const colW = usableW / n;
+  const labelSize = 8;
+  const maxValSize = 18, minValSize = 11;
+  const valSize = fitFontSize(doc, passes.map(p=>p.diam), colW - 2, maxValSize, minValSize);
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(labelSize);
+  doc.setTextColor(110,110,110);
+  passes.forEach((p,i)=>{
+    const cx = marginL + colW*i + colW/2;
+    doc.text(p.label, cx, y, {align:'center', maxWidth: colW-1});
+  });
+
+  const valY = y + (valSize/72*25.4) + 2;
+  doc.setFont('courier','bold');
+  doc.setFontSize(valSize);
+  passes.forEach((p,i)=>{
+    const cx = marginL + colW*i + colW/2;
+    doc.setTextColor(...(p.checkpoint ? [199,106,31] : [20,20,20]));
+    doc.text(p.diam, cx, valY, {align:'center'});
+  });
+  doc.setTextColor(20,20,20);
+  return valY + 6;
+}
+
+function drawMicrometro(doc, y, marginL, usableW, label1, val1, label2, val2){
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(12);
+  doc.setTextColor(20,20,20);
+  doc.text('Da leggere al micrometro (sui rulli)', marginL, y);
+  y += 7;
+  const colW = usableW/2;
+  const pairs = [[label1,val1,[47,125,79]],[label2,val2,[181,57,28]]];
+  pairs.forEach((p,i)=>{
+    const cx = marginL + colW*i;
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(10);
+    doc.setTextColor(110,110,110);
+    doc.text(p[0], cx, y);
+    doc.setFont('courier','bold');
+    doc.setFontSize(18);
+    doc.setTextColor(...p[2]);
+    doc.text(p[1], cx, y + 8);
+  });
+  doc.setTextColor(20,20,20);
+  return y + 14;
+}
+
+function pdfHeader(doc, marginL, titolo){
+  const D = currentD(), P = currentP();
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(16);
+  doc.setTextColor(20,20,20);
+  doc.text('Filettature — Officina', marginL, 18);
+  doc.setFontSize(13);
+  doc.text(titolo, marginL, 27);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(11);
+  doc.setTextColor(90,90,90);
+  doc.text(`D = ${D} mm   —   P = ${P} mm`, marginL, 34);
+  return 44;
+}
+
+function scaricaPdf(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const marginL = 15, usableW = 210 - 2*marginL;
+  const active = [1,2,3,4].find(i => document.getElementById('tab'+i).style.display !== 'none');
+  let y, fname;
+
+  if(active === 1){
+    const classe = document.getElementById('classe-int-tampone').value;
+    const dw = document.getElementById('dw1').value;
+    y = pdfHeader(doc, marginL, `Tampone maschio — filettatura interna classe ${classe}, rullo Ø${dw} mm`);
+    y = drawPassRow(doc, readPasses('tampone-body'), y, marginL, usableW);
+    y += 8;
+    drawMicrometro(doc, y, marginL, usableW,
+      'M tampone PASSA', document.getElementById('mgo1').textContent,
+      'M tampone NON-PASSA', document.getElementById('mnogo1').textContent);
+    fname = `tampone-M${currentD()}x${currentP()}.pdf`;
+  } else if(active === 3){
+    const classe = document.getElementById('classe-ext3').value;
+    const dw = document.getElementById('dw3').value;
+    y = pdfHeader(doc, marginL, `Filettatura esterna classe ${classe}, rullo Ø${dw} mm`);
+    y = drawPassRow(doc, readPasses('est-body'), y, marginL, usableW);
+    y += 8;
+    drawMicrometro(doc, y, marginL, usableW,
+      'Quota MAX (GO)', document.getElementById('mmax3').textContent,
+      'Quota MIN (NO-GO)', document.getElementById('mmin3').textContent);
+    fname = `esterna-M${currentD()}x${currentP()}.pdf`;
+  } else if(active === 4){
+    y = pdfHeader(doc, marginL, 'Filettatura interna — diametro di tornitura del nocciolo');
+    y = drawPassRow(doc, readPasses('int-body'), y, marginL, usableW);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(10);
+    doc.setTextColor(110,110,110);
+    doc.text('Verificare il risultato con il tampone passa/non-passa (tab "Tampone int.").', marginL, y+6);
+    fname = `interna-M${currentD()}x${currentP()}.pdf`;
+  } else {
+    const classeE = document.getElementById('classe-ext-acc').value;
+    const classeI = document.getElementById('classe-int-acc').value;
+    y = pdfHeader(doc, marginL, `Accoppiamento ${classeI} / ${classeE}`);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(11);
+    doc.setTextColor(20,20,20);
+    doc.text(`Vite d2:      ${document.getElementById('acc-dext-min').textContent} — ${document.getElementById('acc-dext-max').textContent} mm`, marginL, y); y+=8;
+    doc.text(`Madrevite D2: ${document.getElementById('acc-dint-min').textContent} — ${document.getElementById('acc-dint-max').textContent} mm`, marginL, y); y+=12;
+    drawMicrometro(doc, y, marginL, usableW,
+      'Gioco minimo', document.getElementById('gioco-min').textContent,
+      'Gioco massimo', document.getElementById('gioco-max').textContent);
+    fname = `accoppiamento-M${currentD()}x${currentP()}.pdf`;
+  }
+
+  doc.save(fname);
+}
+</script>
+</body>
+</html>
