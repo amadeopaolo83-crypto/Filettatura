@@ -1,8 +1,4 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="icon-180.png"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#c76a1f"></head><body>
 <title>Filettature — Officina</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
@@ -72,14 +68,33 @@
     appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);
     font-size:0.82rem;font-weight:600;padding:7px 12px;border-radius:7px;cursor:pointer;
   }
+
+  .plist{display:flex;flex-direction:column;gap:6px;margin-top:6px;}
+  .plist .hd,.plist .pr{display:grid;grid-template-columns:4.6rem minmax(0,1fr) minmax(0,1fr);column-gap:10px;align-items:center;}
+  .plist .hd{font-size:0.72rem;color:var(--ink-dim);font-weight:600;padding:0 2px;}
+  .plist .hd span:nth-child(2){text-align:right;}
+  .plist .pr{min-height:46px;}
+  .plist .pn{font-size:0.82rem;color:var(--ink-dim);font-weight:600;}
+  .plist .pv{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:1.35rem;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+  .plist .pr.start .pv{color:var(--ink-dim);}
+  .plist .pr.last .pv{color:var(--accent);}
+  .plist .pr.spring .pv{color:var(--ink-dim);font-weight:600;}
+  .plist input.box{width:100%;min-width:0;height:44px;font-size:1.05rem;text-align:right;padding:6px 10px;border:1.5px solid var(--line);background:var(--panel);}
+  .hole{display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:8px;background:var(--mono-bg);margin-bottom:12px;}
+  .hole .lbl{font-size:0.83rem;color:var(--ink-dim);}
+  .hole .val{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:1.7rem;font-weight:700;color:var(--accent);}
+  button.print-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;height:44px;padding:0 14px;flex:none;font-size:0.9rem;font-weight:700;background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  button.print-btn:active{opacity:.85;}
+  button.print-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .warnline{font-size:0.8rem;color:var(--warn);margin-top:8px;line-height:1.45;}
   .headrow{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .headrow{margin-bottom:14px}
+  @media (max-width:430px){.headrow{flex-wrap:wrap}}
 
   @media print{
     body{background:#fff;color:#000;}
   }
 </style>
-</head>
-<body>
 <div class="wrap">
   <header>
     <div class="headrow">
@@ -87,7 +102,7 @@
         <h1>Filettature — Officina</h1>
         <p class="sub">Tamponi, accoppiamenti e tornitura, con incrementi diametrali da leggere sul visualizzatore.</p>
       </div>
-      <button class="print-btn" onclick="scaricaPdf()">Scarica PDF</button>
+      <button class="print-btn" id="pdf-btn" onclick="scaricaPdf()" title="Scarica PDF A4 da stampare" aria-label="Scarica PDF A4 da stampare"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6"/><path d="M9.5 14.5L12 17l2.5-2.5"/></svg><span>Scarica PDF</span></button>
     </div>
   </header>
 
@@ -149,9 +164,10 @@
     </div>
 
     <div class="panel">
-      <h2>Diametri da leggere sul visualizzatore (avvicinamento)</h2>
-      <table class="cols-2"><colgroup><col><col></colgroup><thead><tr><th>Passata</th><th>Diametro (mm)</th></tr></thead><tbody id="tampone-body"></tbody></table>
-      <p class="note">Tabella di avvicinamento comune a entrambi i tamponi (partendo dal grezzo al diametro nominale). Dal punto evidenziato in poi, abbandona il calcolo e controlla direttamente con i rulli: fermati quando raggiungi <b>M PASSA</b> per il tampone GO, oppure <b>M NON-PASSA</b> per l'altro.</p>
+      <h2>Passate: diametro da leggere</h2>
+      <div class="plist" id="tampone-list"></div>
+      <p class="warnline" id="tampone-warn"></p>
+      <p class="note">Esterno: parti dal nominale e scendi. Scrivi nella casella la misura sui rulli; fermati quando raggiungi <b>M PASSA</b> (tampone GO) oppure <b>M NON-PASSA</b>.</p>
     </div>
   </div>
 
@@ -224,27 +240,30 @@
     </div>
 
     <div class="panel">
-      <h2>Diametri da leggere sul visualizzatore</h2>
-      <table class="cols-2"><colgroup><col><col></colgroup><thead><tr><th>Passata</th><th>Diametro (mm)</th></tr></thead><tbody id="est-body"></tbody></table>
-      <p class="note">Si parte dal diametro esterno massimo di classe (grezzo tornito a misura) e si scende verso il nocciolo. Dal punto evidenziato in poi, verifica con i rulli invece di fidarti solo del calcolo, fermandoti tra la quota MIN e la quota MAX.</p>
+      <h2>Passate: diametro da leggere</h2>
+      <div class="plist" id="est-list"></div>
+      <p class="warnline" id="est-warn"></p>
+      <p class="note">Parti dal diametro nominale e scendi verso il nocciolo. Scrivi nella casella la misura sui rulli e fermati tra la quota MIN e la quota MAX.</p>
     </div>
   </div>
 
   <!-- TAB 4: REALIZZAZIONE INTERNA -->
   <div id="tab4" style="display:none;">
     <div class="panel">
-      <h2>Filettatura interna — diametro di tornitura del nocciolo</h2>
+      <h2>Filettatura interna — foro di partenza</h2>
+      <div class="hole"><span class="lbl">Diametro di nocciolo (foro) = D − 1,08253·P</span><span class="val" id="hole-val">—</span></div>
       <div class="field">
-        <label>Diametro pre-foro / nocciolo (mm)</label>
+        <label>Foro effettivo da cui parti (mm)</label>
         <input type="number" id="prefo4" step="0.01">
       </div>
-      <p class="note">Precompilato al valore teorico (D − 1,0825·P); modificalo se hai misurato un foro diverso.</p>
+      <p class="note">Precompilato al valore teorico; modificalo se hai misurato un foro diverso.</p>
     </div>
 
     <div class="panel">
-      <h2>Diametri da leggere sul visualizzatore</h2>
-      <table class="cols-2"><colgroup><col><col></colgroup><thead><tr><th>Passata</th><th>Diametro (mm)</th></tr></thead><tbody id="int-body"></tbody></table>
-      <p class="note">Dal punto evidenziato in poi, abbandona il calcolo e controlla con il tampone passa/non-passa (vedi tab "Tampone int."). Il diametro finale di cresta non è quota critica: la tenuta dipende dal diametro medio.</p>
+      <h2>Passate: diametro da leggere</h2>
+      <div class="plist" id="int-list"></div>
+      <p class="warnline" id="int-warn"></p>
+      <p class="note">Si parte dal foro e si sale. Scrivi nella casella la misura sui rulli; chiudi con il tampone passa/non-passa (tab "Tampone int.").</p>
     </div>
   </div>
 
@@ -478,7 +497,70 @@ const INT = [
 ["M60 x 1.5",1.5,"6H",58.376,58.676,59.026,59.238,60.000,60.429],
 ];
 
-const PESI = [0.2469,0.1852,0.1481,0.1235,0.0988,0.0741,0.0617,0.0617];
+// Incrementi radiali per passata (tabella dell'officina), dalla prima all'ultima.
+const RAD = {
+0.5:[0.11,0.09,0.07,0.07],
+0.75:[0.17,0.15,0.11,0.07],
+1:[0.19,0.16,0.13,0.11,0.08],
+1.25:[0.20,0.17,0.14,0.11,0.10,0.08],
+1.5:[0.22,0.21,0.17,0.14,0.12,0.08],
+1.75:[0.22,0.21,0.17,0.14,0.12,0.10,0.10,0.08],
+2:[0.25,0.24,0.18,0.16,0.14,0.12,0.11,0.08],
+2.5:[0.27,0.24,0.20,0.17,0.15,0.13,0.12,0.11,0.11,0.08],
+3:[0.28,0.26,0.21,0.18,0.16,0.14,0.13,0.12,0.12,0.11,0.10,0.08],
+3.5:[0.34,0.31,0.25,0.21,0.18,0.17,0.15,0.14,0.14,0.12,0.11,0.08],
+4:[0.34,0.32,0.25,0.22,0.19,0.17,0.16,0.15,0.14,0.13,0.12,0.12,0.11,0.08],
+4.5:[0.37,0.34,0.28,0.24,0.22,0.20,0.18,0.17,0.16,0.15,0.14,0.13,0.12,0.10],
+5:[0.41,0.39,0.32,0.27,0.24,0.22,0.20,0.19,0.18,0.17,0.16,0.15,0.12,0.10],
+5.5:[0.43,0.40,0.32,0.27,0.24,0.22,0.20,0.19,0.18,0.17,0.16,0.15,0.13,0.13,0.12,0.10],
+6:[0.46,0.43,0.35,0.30,0.27,0.24,0.22,0.21,0.20,0.19,0.18,0.16,0.15,0.14,0.12,0.10]
+};
+const RAD_P = Object.keys(RAD).map(Number).sort((a,b)=>a-b);
+const sumA = a=>a.reduce((x,y)=>x+y,0);
+function sampleSeq(seq,u){ // u in [0,1] lungo la sequenza
+  if(seq.length===1) return seq[0];
+  const x=u*(seq.length-1), i=Math.min(Math.floor(x),seq.length-2), f=x-i;
+  return seq[i]+f*(seq[i+1]-seq[i]);
+}
+// restituisce {seq, exact, outside}
+function radialSeq(P){
+  const ex = RAD_P.find(p=>Math.abs(p-P)<1e-9);
+  if(ex!==undefined) return {seq:RAD[ex].slice(), exact:true, outside:false};
+  if(P<RAD_P[0] || P>RAD_P[RAD_P.length-1]){
+    const edge = P<RAD_P[0] ? RAD_P[0] : RAD_P[RAD_P.length-1];
+    const k = P/edge;
+    return {seq:RAD[edge].map(v=>v*k), exact:false, outside:true};
+  }
+  let lo=RAD_P[0], hi=RAD_P[1];
+  for(let i=0;i<RAD_P.length-1;i++){ if(RAD_P[i]<=P && RAD_P[i+1]>=P){ lo=RAD_P[i]; hi=RAD_P[i+1]; break; } }
+  const t=(P-lo)/(hi-lo), A=RAD[lo], B=RAD[hi];
+  const n=Math.max(2,Math.round(A.length+t*(B.length-A.length)));
+  const tot=sumA(A)+t*(sumA(B)-sumA(A));
+  let seq=[];
+  for(let i=0;i<n;i++){ const u=i/(n-1); seq.push((1-t)*sampleSeq(A,u)+t*sampleSeq(B,u)); }
+  const k=tot/sumA(seq);
+  return {seq:seq.map(v=>v*k), exact:false, outside:false};
+}
+// start: diametro di partenza; sign -1 esterno (scende), +1 interno (sale)
+function buildPasses(start,P,sign){
+  const r=radialSeq(P);
+  const arr=[{label:sign<0?'Nominale':'Foro', diam:start, cls:'start'}];
+  let cum=0;
+  r.seq.forEach((v,i)=>{
+    cum+=v;
+    arr.push({label:'Passata '+(i+1), diam:start+sign*2*cum, cls:(i===r.seq.length-1)?'last':''});
+  });
+  const fin=start+sign*2*cum;
+  arr.push({label:'A vuoto ×2', diam:fin, cls:'spring'});
+  arr.passInfo={n:r.seq.length, total:cum, exact:r.exact, outside:r.outside, final:fin};
+  return arr;
+}
+function passWarn(info){
+  let w='';
+  if(info.outside) w+='Passo fuori dalla tabella (0,5–6 mm): incrementi scalati dal passo più vicino, verifica con i rulli. ';
+  else if(!info.exact) w+='Passo non in tabella: incrementi interpolati tra i passi vicini ('+info.n+' passate). ';
+  return w;
+}
 const EPS = 1e-6;
 function rowD(row){ return parseFloat(row[0].match(/M([\d.]+)/)[1]); }
 function d2basic(D,P){ return D - 0.649519*P; }
@@ -609,29 +691,21 @@ function combineParams(...list){
 // ---------------------------------------------------------------------
 // utility passate
 // ---------------------------------------------------------------------
-function buildPasses(startDiam, totalDelta, increasing){
-  const arr = [];
-  let cum = startDiam;
-  arr.push({label:'Grezzo/pre-foro', diam:cum, cls:''});
-  PESI.forEach((w,i)=>{
-    cum += increasing ? totalDelta*w : -totalDelta*w;
-    const isCheckpoint = (i === 5);
-    arr.push({label:'Passata '+(i+1), diam:cum, cls: isCheckpoint ? 'checkpoint':''});
-  });
-  arr.push({label:'Passata a vuoto', diam:cum, cls:'spring'});
-  arr.push({label:'Passata a vuoto', diam:cum, cls:'spring'});
-  return arr;
-}
-function renderPasses(tbodyEl, passes){
-  tbodyEl.innerHTML = '';
+function renderPasses(el, passes){
+  el.innerHTML='<div class="hd"><span>Pass.</span><span>Leggi (mm)</span><span style="text-align:right">Misura rulli</span></div>';
   passes.forEach(p=>{
-    const tr = document.createElement('tr');
-    if(p.cls) tr.className = p.cls;
-    tr.innerHTML = `<td>${p.label}</td><td class="pass-diam">${p.diam.toFixed(2)}</td>`;
-    tbodyEl.appendChild(tr);
+    const d=document.createElement('div');
+    d.className='pr '+(p.cls||'');
+    const n=document.createElement('span'); n.className='pn'; n.textContent=p.cls==='start'?p.label:(p.cls==='spring'?'A vuoto ×2':p.label.replace('Passata ','n. '));
+    const v=document.createElement('span'); v.className='pv'; v.textContent=p.diam.toFixed(p.cls==='start'&&p.label==='Foro'?3:2);
+    d.appendChild(n); d.appendChild(v);
+    if(p.cls!=='spring' && p.cls!=='start'){
+      const i=document.createElement('input'); i.type='text'; i.inputMode='decimal'; i.className='box'; i.setAttribute('aria-label','Misura sui rulli, '+p.label);
+      d.appendChild(i);
+    } else d.appendChild(document.createElement('span'));
+    el.appendChild(d);
   });
 }
-
 function currentD(){ return parseFloat(document.getElementById('d-nom').value); }
 function currentP(){ return parseFloat(document.getElementById('p-nom').value); }
 
@@ -675,8 +749,9 @@ function calcTampone(){
   document.getElementById('mgo1').textContent = mgo.toFixed(3)+' mm';
   document.getElementById('mnogo1').textContent = mnogo.toFixed(3)+' mm';
 
-  const total = 1.082532*P;
-  renderPasses(document.getElementById('tampone-body'), buildPasses(Dnom, total, false));
+  const ps = buildPasses(Dnom, P, -1);
+  renderPasses(document.getElementById('tampone-list'), ps);
+  document.getElementById('tampone-warn').textContent = passWarn(ps.passInfo);
 }
 document.getElementById('classe-int-tampone').addEventListener('change', calcTampone);
 document.getElementById('dw1').addEventListener('input', calcTampone);
@@ -730,8 +805,9 @@ function calcEsterna(){
   document.getElementById('mmax3').textContent = mmax.toFixed(3)+' mm';
   document.getElementById('mmin3').textContent = mmin.toFixed(3)+' mm';
 
-  const total = 1.082532*P;
-  renderPasses(document.getElementById('est-body'), buildPasses(DMAX, total, false));
+  const ps = buildPasses(D, P, -1);
+  renderPasses(document.getElementById('est-list'), ps);
+  document.getElementById('est-warn').textContent = passWarn(ps.passInfo);
 }
 document.getElementById('classe-ext3').addEventListener('change', calcEsterna);
 document.getElementById('dw3').addEventListener('input', calcEsterna);
@@ -743,14 +819,19 @@ const prefo4 = document.getElementById('prefo4');
 function aggiornaPrefo4(){
   const D = currentD(), P = currentP();
   if(isNaN(D)||isNaN(P)) return;
-  prefo4.value = (D - 1.082532*P).toFixed(2);
+  prefo4.value = (D - 1.08253*P).toFixed(3);
+  document.getElementById('hole-val').textContent = (D - 1.08253*P).toFixed(3)+' mm';
 }
 function calcInterna(){
   const D = currentD(), P = currentP();
   const preforo = parseFloat(prefo4.value);
   if(isNaN(D)||isNaN(P)||isNaN(preforo)) return;
-  const total = D - preforo;
-  renderPasses(document.getElementById('int-body'), buildPasses(preforo, total, true));
+  const ps = buildPasses(preforo, P, +1);
+  renderPasses(document.getElementById('int-list'), ps);
+  let w = passWarn(ps.passInfo);
+  let Dmax = D + getIntParams(D,P,'6H').Td;
+  if(ps.passInfo.final > Dmax + 0.0005) w += 'Attenzione: la lettura finale ('+ps.passInfo.final.toFixed(2)+') supera il diametro maggiore massimo 6H ('+Dmax.toFixed(2)+'): foro troppo grande? ';
+  document.getElementById('int-warn').textContent = w;
 }
 prefo4.addEventListener('input', calcInterna);
 
@@ -771,148 +852,114 @@ aggiornaPrefo4();
 refreshAll();
 
 // ===========================================================================
-// Export PDF — un foglio solo, passate su un'unica riga (dimensione font
-// auto-adattata per starci), quota da leggere sul micrometro in evidenza.
+// Export PDF — un solo foglio A4. Passate in colonna verticale, quote a 18pt,
+// resto a 14pt, casella vuota a destra per la misura sui rulli.
 // ===========================================================================
-function readPasses(tbodyId){
-  const rows = [...document.getElementById(tbodyId).querySelectorAll('tr')];
-  return rows
-    .filter(tr => !tr.className.includes('spring'))
-    .map(tr => {
-      const tds = tr.querySelectorAll('td');
-      return { label: tds[0].textContent, diam: tds[1].textContent, checkpoint: tr.className.includes('checkpoint') };
-    });
+function readList(id){
+  return [...document.getElementById(id).querySelectorAll('.pr')].map(r=>({
+    label: r.querySelector('.pn').textContent,
+    diam: r.querySelector('.pv').textContent,
+    cls: r.className,
+    meas: (r.querySelector('input')||{}).value||''
+  }));
 }
-
-function fitFontSize(doc, texts, maxWidth, maxSize, minSize){
-  let size = maxSize;
-  doc.setFont('courier','bold');
-  while(size > minSize){
-    doc.setFontSize(size);
-    const w = Math.max(...texts.map(t=>doc.getTextWidth(t)));
-    if(w <= maxWidth) break;
-    size -= 0.5;
-  }
-  return size;
-}
-
-function drawPassRow(doc, passes, y, marginL, usableW){
-  const n = passes.length;
-  const colW = usableW / n;
-  const labelSize = 8;
-  const maxValSize = 18, minValSize = 11;
-  const valSize = fitFontSize(doc, passes.map(p=>p.diam), colW - 2, maxValSize, minValSize);
-
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(labelSize);
-  doc.setTextColor(110,110,110);
-  passes.forEach((p,i)=>{
-    const cx = marginL + colW*i + colW/2;
-    doc.text(p.label, cx, y, {align:'center', maxWidth: colW-1});
-  });
-
-  const valY = y + (valSize/72*25.4) + 2;
-  doc.setFont('courier','bold');
-  doc.setFontSize(valSize);
-  passes.forEach((p,i)=>{
-    const cx = marginL + colW*i + colW/2;
-    doc.setTextColor(...(p.checkpoint ? [199,106,31] : [20,20,20]));
-    doc.text(p.diam, cx, valY, {align:'center'});
-  });
-  doc.setTextColor(20,20,20);
-  return valY + 6;
-}
-
-function drawMicrometro(doc, y, marginL, usableW, label1, val1, label2, val2){
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(12);
-  doc.setTextColor(20,20,20);
-  doc.text('Da leggere al micrometro (sui rulli)', marginL, y);
-  y += 7;
-  const colW = usableW/2;
-  const pairs = [[label1,val1,[47,125,79]],[label2,val2,[181,57,28]]];
-  pairs.forEach((p,i)=>{
-    const cx = marginL + colW*i;
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(10);
-    doc.setTextColor(110,110,110);
-    doc.text(p[0], cx, y);
-    doc.setFont('courier','bold');
-    doc.setFontSize(18);
-    doc.setTextColor(...p[2]);
-    doc.text(p[1], cx, y + 8);
-  });
-  doc.setTextColor(20,20,20);
-  return y + 14;
-}
-
-function pdfHeader(doc, marginL, titolo){
-  const D = currentD(), P = currentP();
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(16);
-  doc.setTextColor(20,20,20);
-  doc.text('Filettature — Officina', marginL, 18);
-  doc.setFontSize(13);
-  doc.text(titolo, marginL, 27);
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(11);
-  doc.setTextColor(90,90,90);
-  doc.text(`D = ${D} mm   —   P = ${P} mm`, marginL, 34);
-  return 44;
-}
-
-function scaricaPdf(){
+function buildPdf(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
-  const marginL = 15, usableW = 210 - 2*marginL;
-  const active = [1,2,3,4].find(i => document.getElementById('tab'+i).style.display !== 'none');
-  let y, fname;
-
-  if(active === 1){
-    const classe = document.getElementById('classe-int-tampone').value;
-    const dw = document.getElementById('dw1').value;
-    y = pdfHeader(doc, marginL, `Tampone maschio — filettatura interna classe ${classe}, rullo Ø${dw} mm`);
-    y = drawPassRow(doc, readPasses('tampone-body'), y, marginL, usableW);
-    y += 8;
-    drawMicrometro(doc, y, marginL, usableW,
-      'M tampone PASSA', document.getElementById('mgo1').textContent,
-      'M tampone NON-PASSA', document.getElementById('mnogo1').textContent);
-    fname = `tampone-M${currentD()}x${currentP()}.pdf`;
-  } else if(active === 3){
-    const classe = document.getElementById('classe-ext3').value;
-    const dw = document.getElementById('dw3').value;
-    y = pdfHeader(doc, marginL, `Filettatura esterna classe ${classe}, rullo Ø${dw} mm`);
-    y = drawPassRow(doc, readPasses('est-body'), y, marginL, usableW);
-    y += 8;
-    drawMicrometro(doc, y, marginL, usableW,
-      'Quota MAX (GO)', document.getElementById('mmax3').textContent,
-      'Quota MIN (NO-GO)', document.getElementById('mmin3').textContent);
-    fname = `esterna-M${currentD()}x${currentP()}.pdf`;
-  } else if(active === 4){
-    y = pdfHeader(doc, marginL, 'Filettatura interna — diametro di tornitura del nocciolo');
-    y = drawPassRow(doc, readPasses('int-body'), y, marginL, usableW);
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(10);
-    doc.setTextColor(110,110,110);
-    doc.text('Verificare il risultato con il tampone passa/non-passa (tab "Tampone int.").', marginL, y+6);
-    fname = `interna-M${currentD()}x${currentP()}.pdf`;
+  const D=currentD(), P=currentP();
+  const active=[1,2,3,4].find(i=>document.getElementById('tab'+i).style.display!=='none');
+  const mL=15, W=180;
+  const pt=p=>p*25.4/72;
+  let fname, title, listId, foot=[], hole=null;
+  const fx=x=>String(+x.toFixed(3));
+  if(active===1){
+    const c=document.getElementById('classe-int-tampone').value, dw=document.getElementById('dw1').value;
+    title=`Tampone passa/non-passa int. ${c} — rullo Ø${dw}`; listId='tampone-list';
+    foot=[['M PASSA',document.getElementById('mgo1').textContent],['M NON-PASSA',document.getElementById('mnogo1').textContent]];
+    fname=`tampone-M${fx(D)}x${fx(P)}.pdf`;
+  } else if(active===3){
+    const c=document.getElementById('classe-ext3').value, dw=document.getElementById('dw3').value;
+    title=`Filettatura esterna ${c} — rullo Ø${dw}`; listId='est-list';
+    foot=[['Quota MAX',document.getElementById('mmax3').textContent],['Quota MIN',document.getElementById('mmin3').textContent]];
+    fname=`esterna-M${fx(D)}x${fx(P)}.pdf`;
+  } else if(active===4){
+    title='Filettatura interna'; listId='int-list';
+    hole=(D-1.08253*P).toFixed(3);
+    fname=`interna-M${fx(D)}x${fx(P)}.pdf`;
   } else {
-    const classeE = document.getElementById('classe-ext-acc').value;
-    const classeI = document.getElementById('classe-int-acc').value;
-    y = pdfHeader(doc, marginL, `Accoppiamento ${classeI} / ${classeE}`);
+    const cE=document.getElementById('classe-ext-acc').value, cI=document.getElementById('classe-int-acc').value;
+    doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    doc.text(`Accoppiamento ${cI} / ${cE} — M${fx(D)} x ${fx(P)}`, mL, 20);
     doc.setFont('helvetica','normal');
-    doc.setFontSize(11);
-    doc.setTextColor(20,20,20);
-    doc.text(`Vite d2:      ${document.getElementById('acc-dext-min').textContent} — ${document.getElementById('acc-dext-max').textContent} mm`, marginL, y); y+=8;
-    doc.text(`Madrevite D2: ${document.getElementById('acc-dint-min').textContent} — ${document.getElementById('acc-dint-max').textContent} mm`, marginL, y); y+=12;
-    drawMicrometro(doc, y, marginL, usableW,
-      'Gioco minimo', document.getElementById('gioco-min').textContent,
-      'Gioco massimo', document.getElementById('gioco-max').textContent);
-    fname = `accoppiamento-M${currentD()}x${currentP()}.pdf`;
+    let y=34; const g=id=>document.getElementById(id).textContent;
+    [`Vite d2: ${g('acc-dext-min')} – ${g('acc-dext-max')} mm`,`Madrevite D2: ${g('acc-dint-min')} – ${g('acc-dint-max')} mm`,`Gioco minimo: ${g('gioco-min')} mm`,`Gioco massimo: ${g('gioco-max')} mm`].forEach(t=>{doc.text(t,mL,y);y+=10;});
+    return {doc, fname:`accoppiamento-M${fx(D)}x${fx(P)}.pdf`};
   }
+  const rows=readList(listId);
+  // intestazione (14pt)
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(20,20,20);
+  doc.text(`M${fx(D)} x ${fx(P)}`, mL, 16);
+  doc.text(`Ø nominale ${fx(D)} mm   Passo ${fx(P)} mm`, mL+W, 16, {align:'right'});
+  doc.setFont('helvetica','normal');
+  doc.text(title, mL, 23);
+  let y=29;
+  if(hole){
+    doc.text('Diametro nocciolo (foro):', mL, y+5);
+    doc.setFont('courier','bold'); doc.setFontSize(18);
+    doc.text(hole+' mm', mL+W, y+5.5, {align:'right'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(14);
+    y+=11;
+  }
+  // piede riservato
+  const footH = foot.length ? 18 : 6;
+  const hdrH = 7;
+  const avail = 297-12-footH-y-hdrH;
+  const rowH = Math.min(14, avail/rows.length);
+  // intestazione colonne
+  doc.setFontSize(14); doc.setTextColor(90,90,90);
+  doc.text('Pass.', mL, y+5);
+  doc.text('Leggi (mm)', mL+68, y+5, {align:'right'});
+  doc.text('Misura rulli', mL+W-2, y+5, {align:'right'});
+  y+=hdrH;
+  doc.setDrawColor(60,60,60); doc.setLineWidth(0.3);
+  rows.forEach(r=>{
+    const isStart=r.cls.includes('start'), isLast=r.cls.includes('last'), isSpring=r.cls.includes('spring');
+    const by=y+(rowH-pt(14))/2; // centratura grossolana
+    doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(20,20,20);
+    doc.text(r.label, mL, y+rowH/2+pt(14)/3);
+    doc.setFont('courier','bold'); doc.setFontSize(18);
+    doc.setTextColor(...(isLast?[199,106,31]:isStart||isSpring?[90,90,90]:[20,20,20]));
+    doc.text(r.diam, mL+68, y+rowH/2+pt(18)/3, {align:'right'});
+    if(!isStart && !isSpring) doc.rect(mL+78, y+0.8, W-78, rowH-1.6);
+    y+=rowH;
+  });
+  if(foot.length){
+    y+=5; doc.setTextColor(20,20,20);
+    const cw=W/2;
+    foot.forEach((f,i)=>{
+      const x=mL+cw*i;
+      doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.text(f[0], x, y);
+      doc.setFont('courier','bold'); doc.setFontSize(18); doc.text(f[1], x, y+7.5);
+    });
+  }
+  return {doc, fname};
+}
 
-  doc.save(fname);
+let _pdfBusy=false;
+async function scaricaPdf(){
+  if(_pdfBusy) return; _pdfBusy=true;
+  try{
+    const {doc,fname}=buildPdf();
+    let dl=null;
+    try{ dl = (window.claude && claude.use) ? await claude.use('downloads') : null; }catch(e){ dl=null; }
+    if(dl){
+      try{ await dl.save({filename:fname, data:doc.output('blob')}); }
+      catch(e){ if(!e || e.code!=='declined') doc.save(fname); }
+    } else {
+      doc.save(fname);
+    }
+  } finally { _pdfBusy=false; }
 }
 </script>
-</body>
-</html>
+
+</body></html>
