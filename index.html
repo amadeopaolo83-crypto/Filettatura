@@ -131,8 +131,14 @@
       <div class="row">
         <label>Classe filettatura interna da verificare</label>
         <label>Diametro rullo dw (mm)</label>
-        <select id="classe-int-tampone"><option value="5H">5H</option><option value="6H">6H</option><option value="7H">7H</option></select>
+        <select id="classe-int-tampone"><option value="5H">5H</option><option value="6H" selected>6H</option><option value="7H">7H</option></select>
         <input type="number" id="dw1" value="0.90" step="0.01" min="0.1">
+      </div>
+      <div class="row">
+        <label>Tampone da tornire</label>
+        <label>Cresta NON-PASSA (× H sopra D2)</label>
+        <select id="tipo-tampone"><option value="go">PASSA</option><option value="nogo">NON-PASSA</option></select>
+        <input type="number" id="cresta-f" value="0.25" step="0.01" min="0.05" max="0.375">
       </div>
       <p class="note" id="campo-rulli-note"></p>
     </div>
@@ -147,6 +153,16 @@
         <span class="lbl">D2 max filettatura interna → PD tampone NON-PASSA</span>
         <span class="val" id="d2nogo">—</span>
       </div>
+      <h3>Diametro di tornitura della cresta</h3>
+      <div class="result go">
+        <span class="lbl">Cresta tampone PASSA (profilo pieno)</span>
+        <span class="val" id="crest-go">—</span>
+      </div>
+      <div class="result nogo">
+        <span class="lbl">Cresta tampone NON-PASSA (ridotta)</span>
+        <span class="val" id="crest-nogo">—</span>
+      </div>
+      <p class="note" id="crest-note"></p>
       <p class="note">Il tampone PASSA riproduce il limite minimo del diametro medio della madrevite (deve entrare libero); il NON-PASSA riproduce il limite massimo (non deve entrare, o al massimo 1-3 filetti).</p>
     </div>
 
@@ -167,7 +183,7 @@
       <h2>Passate: diametro da leggere</h2>
       <div class="plist" id="tampone-list"></div>
       <p class="warnline" id="tampone-warn"></p>
-      <p class="note">Esterno: parti dal nominale e scendi. Scrivi nella casella la misura sui rulli; fermati quando raggiungi <b>M PASSA</b> (tampone GO) oppure <b>M NON-PASSA</b>.</p>
+      <p class="note" id="tampone-pnote"></p>
     </div>
   </div>
 
@@ -542,9 +558,10 @@ function radialSeq(P){
   return {seq:seq.map(v=>v*k), exact:false, outside:false};
 }
 // start: diametro di partenza; sign -1 esterno (scende), +1 interno (sale)
-function buildPasses(start,P,sign){
+function buildPasses(start,P,sign,scale,startLabel){
   const r=radialSeq(P);
-  const arr=[{label:sign<0?'Nominale':'Foro', diam:start, cls:'start'}];
+  if(scale && scale!==1) r.seq=r.seq.map(v=>v*scale);
+  const arr=[{label:startLabel||(sign<0?'Nominale':'Foro'), diam:start, cls:'start'}];
   let cum=0;
   r.seq.forEach((v,i)=>{
     cum+=v;
@@ -749,12 +766,30 @@ function calcTampone(){
   document.getElementById('mgo1').textContent = mgo.toFixed(3)+' mm';
   document.getElementById('mnogo1').textContent = mnogo.toFixed(3)+' mm';
 
-  const ps = buildPasses(Dnom, P, -1);
+  // diametri di tornitura cresta: PASSA = profilo pieno (D2min + 2·3/8H = D); NON-PASSA = cresta ridotta a f·H sopra D2max
+  const H = (Math.sqrt(3)/2)*P;
+  let f = parseFloat(document.getElementById('cresta-f').value);
+  if(isNaN(f) || f<=0) f = 0.25;
+  const crestGo = D2min + 2*0.375*H;
+  const crestNogo = D2max + 2*f*H;
+  document.getElementById('crest-go').textContent = crestGo.toFixed(3)+' mm';
+  document.getElementById('crest-nogo').textContent = crestNogo.toFixed(3)+' mm';
+  document.getElementById('crest-note').textContent = 'NON-PASSA: cresta tagliata a '+f+'·H ('+(f*H).toFixed(3)+' mm) sopra il diametro medio, così tocca solo i fianchi. Riduzione sul nominale: '+(D-crestNogo).toFixed(3)+' mm. Valore indicativo: confrontalo con il tuo disegno/norma (ISO 1502) e correggi il fattore se serve.';
+  const tipo = document.getElementById('tipo-tampone').value;
+  const totGo = sumA(radialSeq(P).seq);
+  const isNg = tipo==='nogo';
+  const start = isNg ? crestNogo : Dnom;
+  // il NON-PASSA parte da una cresta più piccola ma arriva alla stessa radice del PASSA
+  const scale = isNg ? Math.max(0.2,(totGo-(Dnom-crestNogo)/2)/totGo) : 1;
+  const ps = buildPasses(start, P, -1, scale, isNg?'Cresta NG':'Nominale');
   renderPasses(document.getElementById('tampone-list'), ps);
   document.getElementById('tampone-warn').textContent = passWarn(ps.passInfo);
+  document.getElementById('tampone-pnote').innerHTML = 'Tampone <b>'+(isNg?'NON-PASSA':'PASSA')+'</b>: parti dalla cresta '+start.toFixed(3)+' mm. Scrivi nella casella la misura sui rulli e fermati a <b>'+(isNg?'M NON-PASSA':'M PASSA')+'</b> ('+(isNg?mnogo:mgo).toFixed(3)+' mm).';
 }
 document.getElementById('classe-int-tampone').addEventListener('change', calcTampone);
 document.getElementById('dw1').addEventListener('input', calcTampone);
+document.getElementById('tipo-tampone').addEventListener('change', calcTampone);
+document.getElementById('cresta-f').addEventListener('input', calcTampone);
 
 // ---------------------------------------------------------------------
 // TAB 2: ACCOPPIAMENTO
@@ -874,9 +909,10 @@ function buildPdf(){
   const fx=x=>String(+x.toFixed(3));
   if(active===1){
     const c=document.getElementById('classe-int-tampone').value, dw=document.getElementById('dw1').value;
-    title=`Tampone passa/non-passa int. ${c} — rullo Ø${dw}`; listId='tampone-list';
-    foot=[['M PASSA',document.getElementById('mgo1').textContent],['M NON-PASSA',document.getElementById('mnogo1').textContent]];
-    fname=`tampone-M${fx(D)}x${fx(P)}.pdf`;
+    const ng=document.getElementById('tipo-tampone').value==='nogo';
+    title=`Tampone ${ng?'NON-PASSA':'PASSA'} int. ${c} — rullo Ø${dw}`; listId='tampone-list';
+    foot=ng?[['M NON-PASSA',document.getElementById('mnogo1').textContent],['Cresta',document.getElementById('crest-nogo').textContent]]:[['M PASSA',document.getElementById('mgo1').textContent],['Cresta',document.getElementById('crest-go').textContent]];
+    fname=`tampone-${ng?'nogo':'go'}-M${fx(D)}x${fx(P)}.pdf`;
   } else if(active===3){
     const c=document.getElementById('classe-ext3').value, dw=document.getElementById('dw3').value;
     title=`Filettatura esterna ${c} — rullo Ø${dw}`; listId='est-list';
