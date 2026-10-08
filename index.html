@@ -134,10 +134,8 @@
         <select id="classe-int-tampone"><option value="5H">5H</option><option value="6H" selected>6H</option><option value="7H">7H</option></select>
         <input type="number" id="dw1" value="0.90" step="0.01" min="0.1">
       </div>
-      <div class="row">
-        <label>Tampone da tornire</label>
+      <div class="field">
         <label>Cresta NON-PASSA (× H sopra D2)</label>
-        <select id="tipo-tampone"><option value="go">PASSA</option><option value="nogo">NON-PASSA</option></select>
         <input type="number" id="cresta-f" value="0.25" step="0.01" min="0.05" max="0.375">
       </div>
       <p class="note" id="campo-rulli-note"></p>
@@ -775,20 +773,13 @@ function calcTampone(){
   document.getElementById('crest-go').textContent = crestGo.toFixed(3)+' mm';
   document.getElementById('crest-nogo').textContent = crestNogo.toFixed(3)+' mm';
   document.getElementById('crest-note').textContent = 'NON-PASSA: cresta tagliata a '+f+'·H ('+(f*H).toFixed(3)+' mm) sopra il diametro medio, così tocca solo i fianchi. Riduzione sul nominale: '+(D-crestNogo).toFixed(3)+' mm. Valore indicativo: confrontalo con il tuo disegno/norma (ISO 1502) e correggi il fattore se serve.';
-  const tipo = document.getElementById('tipo-tampone').value;
-  const totGo = sumA(radialSeq(P).seq);
-  const isNg = tipo==='nogo';
-  const start = isNg ? crestNogo : Dnom;
-  // il NON-PASSA parte da una cresta più piccola ma arriva alla stessa radice del PASSA
-  const scale = isNg ? Math.max(0.2,(totGo-(Dnom-crestNogo)/2)/totGo) : 1;
-  const ps = buildPasses(start, P, -1, scale, isNg?'Cresta NG':'Nominale');
+  const ps = buildPasses(Dnom, P, -1, 1, 'Cresta');
   renderPasses(document.getElementById('tampone-list'), ps);
   document.getElementById('tampone-warn').textContent = passWarn(ps.passInfo);
-  document.getElementById('tampone-pnote').innerHTML = 'Tampone <b>'+(isNg?'NON-PASSA':'PASSA')+'</b>: parti dalla cresta '+start.toFixed(3)+' mm. Scrivi nella casella la misura sui rulli e fermati a <b>'+(isNg?'M NON-PASSA':'M PASSA')+'</b> ('+(isNg?mnogo:mgo).toFixed(3)+' mm).';
+  document.getElementById('tampone-pnote').innerHTML = 'Passate del tampone <b>PASSA</b>: parti dalla cresta '+Dnom.toFixed(3)+' mm. Scrivi nella casella la misura sui rulli e fermati a <b>M PASSA</b> ('+mgo.toFixed(3)+' mm). Il NON-PASSA si tornisce alla sua cresta e si controlla solo con la quota M.';
 }
 document.getElementById('classe-int-tampone').addEventListener('change', calcTampone);
 document.getElementById('dw1').addEventListener('input', calcTampone);
-document.getElementById('tipo-tampone').addEventListener('change', calcTampone);
 document.getElementById('cresta-f').addEventListener('input', calcTampone);
 
 // ---------------------------------------------------------------------
@@ -908,11 +899,9 @@ function tamponeData(){
   const H=(Math.sqrt(3)/2)*P, k=H;
   let f=parseFloat(document.getElementById('cresta-f').value); if(isNaN(f)||f<=0) f=0.25;
   const crestGo=D2min+2*0.375*H, crestNogo=D2max+2*f*H;
-  const totGo=sumA(radialSeq(P).seq);
-  const scaleNg=Math.max(0.2,(totGo-(D-crestNogo)/2)/totGo);
   return {D,P,dw,classe,TD2:params.TD2,D2min,D2max,crestGo,crestNogo,
     mgo:D2min+3*dw-k, mnogo:D2max+3*dw-k,
-    psGo:buildPasses(D,P,-1,1,'Cresta'), psNg:buildPasses(crestNogo,P,-1,scaleNg,'Cresta')};
+    psGo:buildPasses(D,P,-1,1,'Cresta')};
 }
 function buildTamponePdf(doc){
   const t=tamponeData(), mL=15, W=180, colW=88, gap=4, pt=p=>p*25.4/72;
@@ -948,31 +937,29 @@ function buildTamponePdf(doc){
   doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(20,20,20);
   doc.text(`D2 madrevite ${t.classe}: ${t.D2min.toFixed(3)} – ${t.D2max.toFixed(3)}  (tolleranza ${t.TD2.toFixed(3)})`, mL, y+6);
   y+=11;
-  // liste passate affiancate
-  const lists=[t.psGo, t.psNg];
-  const nRows=Math.max(lists[0].length, lists[1].length);
-  const hdr=7;
-  const rowH=Math.min(13,(297-12-y-hdr)/nRows);
-  lists.forEach((ps,i)=>{
-    const x0=xs[i]; let yy=y;
-    doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(90,90,90);
-    doc.text('Pass.', x0, yy+5);
-    doc.text('Leggi', x0+50, yy+5, {align:'right'});
-    doc.text('Rulli', x0+colW-1, yy+5, {align:'right'});
-    yy+=hdr;
-    doc.setDrawColor(60,60,60); doc.setLineWidth(0.3);
-    ps.forEach(p=>{
-      const isStart=p.cls==='start', isLast=p.cls==='last', isSp=p.cls==='spring';
-      const lab=isStart?'Cresta':(isSp?'Vuoto×2':p.label.replace('Passata ','n. '));
-      const cy=yy+rowH/2;
-      doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(20,20,20);
-      doc.text(lab, x0, cy+pt(14)/3);
-      doc.setFont('courier','bold'); doc.setFontSize(18);
-      doc.setTextColor(...(isLast?[199,106,31]:(isStart||isSp)?[90,90,90]:[20,20,20]));
-      doc.text(p.diam.toFixed(isStart?3:2), x0+50, cy+pt(18)/3, {align:'right'});
-      if(!isStart && !isSp) doc.rect(x0+54, yy+0.8, colW-54, rowH-1.6);
-      yy+=rowH;
-    });
+  // lista passate: solo tampone PASSA, colonna verticale con casella
+  const ps=t.psGo, hdr=7;
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(20,20,20);
+  doc.text('Passate tampone PASSA (parti dalla cresta)', mL, y+5);
+  y+=hdr+1;
+  const rowH=Math.min(13,(297-12-y-hdr)/ps.length);
+  doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(90,90,90);
+  doc.text('Pass.', mL, y+5);
+  doc.text('Leggi (mm)', mL+68, y+5, {align:'right'});
+  doc.text('Misura rulli', mL+W-2, y+5, {align:'right'});
+  y+=hdr;
+  doc.setDrawColor(60,60,60); doc.setLineWidth(0.3);
+  ps.forEach(p=>{
+    const isStart=p.cls==='start', isLast=p.cls==='last', isSp=p.cls==='spring';
+    const lab=isStart?'Cresta':(isSp?'A vuoto ×2':p.label.replace('Passata ','n. '));
+    const cy=y+rowH/2;
+    doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(20,20,20);
+    doc.text(lab, mL, cy+pt(14)/3);
+    doc.setFont('courier','bold'); doc.setFontSize(18);
+    doc.setTextColor(...(isLast?[199,106,31]:(isStart||isSp)?[90,90,90]:[20,20,20]));
+    doc.text(p.diam.toFixed(isStart?3:2), mL+68, cy+pt(18)/3, {align:'right'});
+    if(!isStart && !isSp) doc.rect(mL+78, y+0.8, W-78, rowH-1.6);
+    y+=rowH;
   });
   return `tampone-M${fx(t.D)}x${fx(t.P)}.pdf`;
 }
@@ -987,13 +974,7 @@ function buildPdf(){
   const pt=p=>p*25.4/72;
   let fname, title, listId, foot=[], hole=null;
   const fx=x=>String(+x.toFixed(3));
-  if(active===1){
-    const c=document.getElementById('classe-int-tampone').value, dw=document.getElementById('dw1').value;
-    const ng=document.getElementById('tipo-tampone').value==='nogo';
-    title=`Tampone ${ng?'NON-PASSA':'PASSA'} int. ${c} — rullo Ø${dw}`; listId='tampone-list';
-    foot=ng?[['M NON-PASSA',document.getElementById('mnogo1').textContent],['Cresta',document.getElementById('crest-nogo').textContent]]:[['M PASSA',document.getElementById('mgo1').textContent],['Cresta',document.getElementById('crest-go').textContent]];
-    fname=`tampone-${ng?'nogo':'go'}-M${fx(D)}x${fx(P)}.pdf`;
-  } else if(active===3){
+  if(active===3){
     const c=document.getElementById('classe-ext3').value, dw=document.getElementById('dw3').value;
     title=`Filettatura esterna ${c} — rullo Ø${dw}`; listId='est-list';
     foot=[['Quota MAX',document.getElementById('mmax3').textContent],['Quota MIN',document.getElementById('mmin3').textContent]];
