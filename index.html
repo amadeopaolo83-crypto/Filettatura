@@ -898,11 +898,91 @@ function readList(id){
     meas: (r.querySelector('input')||{}).value||''
   }));
 }
+
+function tamponeData(){
+  const D=currentD(), P=currentP();
+  const dw=parseFloat(document.getElementById('dw1').value);
+  const classe=document.getElementById('classe-int-tampone').value;
+  const params=getIntParams(D,P,classe);
+  const D2min=d2basic(D,P), D2max=D2min+params.TD2;
+  const H=(Math.sqrt(3)/2)*P, k=H;
+  let f=parseFloat(document.getElementById('cresta-f').value); if(isNaN(f)||f<=0) f=0.25;
+  const crestGo=D2min+2*0.375*H, crestNogo=D2max+2*f*H;
+  const totGo=sumA(radialSeq(P).seq);
+  const scaleNg=Math.max(0.2,(totGo-(D-crestNogo)/2)/totGo);
+  return {D,P,dw,classe,TD2:params.TD2,D2min,D2max,crestGo,crestNogo,
+    mgo:D2min+3*dw-k, mnogo:D2max+3*dw-k,
+    psGo:buildPasses(D,P,-1,1,'Cresta'), psNg:buildPasses(crestNogo,P,-1,scaleNg,'Cresta')};
+}
+function buildTamponePdf(doc){
+  const t=tamponeData(), mL=15, W=180, colW=88, gap=4, pt=p=>p*25.4/72;
+  const fx=x=>String(+x.toFixed(3));
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(20,20,20);
+  doc.text(`M${fx(t.D)} x ${fx(t.P)}`, mL, 16);
+  doc.text(`Ø nominale ${fx(t.D)}   Passo ${fx(t.P)}`, mL+W, 16, {align:'right'});
+  doc.setFont('helvetica','normal');
+  doc.text(`Tampone passa/non-passa — madrevite ${t.classe}, rullo Ø${t.dw}`, mL, 23);
+  // tabella quote: due colonne
+  let y=30;
+  const xs=[mL, mL+colW+gap*2];
+  const heads=['TAMPONE PASSA','TAMPONE NON-PASSA'];
+  const rowsQ=[
+    ['Ø cresta', t.crestGo.toFixed(3), t.crestNogo.toFixed(3)],
+    ['D2 medio', t.D2min.toFixed(3), t.D2max.toFixed(3)],
+    ['M rulli', t.mgo.toFixed(3), t.mnogo.toFixed(3)]
+  ];
+  doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  heads.forEach((h,i)=>{ doc.text(h, xs[i], y+5); });
+  doc.setLineWidth(0.3); doc.setDrawColor(60,60,60);
+  doc.line(mL, y+7, mL+W, y+7);
+  y+=7;
+  rowsQ.forEach(r=>{
+    [1,2].forEach((c,i)=>{
+      doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(90,90,90);
+      doc.text(r[0], xs[i], y+6.5);
+      doc.setFont('courier','bold'); doc.setFontSize(18); doc.setTextColor(20,20,20);
+      doc.text(r[c], xs[i]+colW, y+6.8, {align:'right'});
+    });
+    y+=9.5;
+  });
+  doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(20,20,20);
+  doc.text(`D2 madrevite ${t.classe}: ${t.D2min.toFixed(3)} – ${t.D2max.toFixed(3)}  (tolleranza ${t.TD2.toFixed(3)})`, mL, y+6);
+  y+=11;
+  // liste passate affiancate
+  const lists=[t.psGo, t.psNg];
+  const nRows=Math.max(lists[0].length, lists[1].length);
+  const hdr=7;
+  const rowH=Math.min(13,(297-12-y-hdr)/nRows);
+  lists.forEach((ps,i)=>{
+    const x0=xs[i]; let yy=y;
+    doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(90,90,90);
+    doc.text('Pass.', x0, yy+5);
+    doc.text('Leggi', x0+50, yy+5, {align:'right'});
+    doc.text('Rulli', x0+colW-1, yy+5, {align:'right'});
+    yy+=hdr;
+    doc.setDrawColor(60,60,60); doc.setLineWidth(0.3);
+    ps.forEach(p=>{
+      const isStart=p.cls==='start', isLast=p.cls==='last', isSp=p.cls==='spring';
+      const lab=isStart?'Cresta':(isSp?'Vuoto×2':p.label.replace('Passata ','n. '));
+      const cy=yy+rowH/2;
+      doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(20,20,20);
+      doc.text(lab, x0, cy+pt(14)/3);
+      doc.setFont('courier','bold'); doc.setFontSize(18);
+      doc.setTextColor(...(isLast?[199,106,31]:(isStart||isSp)?[90,90,90]:[20,20,20]));
+      doc.text(p.diam.toFixed(isStart?3:2), x0+50, cy+pt(18)/3, {align:'right'});
+      if(!isStart && !isSp) doc.rect(x0+54, yy+0.8, colW-54, rowH-1.6);
+      yy+=rowH;
+    });
+  });
+  return `tampone-M${fx(t.D)}x${fx(t.P)}.pdf`;
+}
+
 function buildPdf(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
   const D=currentD(), P=currentP();
   const active=[1,2,3,4].find(i=>document.getElementById('tab'+i).style.display!=='none');
+  if(active===1){ const fn=buildTamponePdf(doc); return {doc, fname:fn}; }
   const mL=15, W=180;
   const pt=p=>p*25.4/72;
   let fname, title, listId, foot=[], hole=null;
